@@ -16,21 +16,16 @@ pub enum Error {
 	Bzip { #[from] source: bzip::Error, backtrace: std::backtrace::Backtrace },
 
 	#[error("{source}")]
-	Itp { #[from] source: ItpError, backtrace: std::backtrace::Backtrace },
+	Itp {
+		#[allow(private_interfaces)]
+		#[from]
+		source: ItpError,
+		backtrace: std::backtrace::Backtrace,
+	},
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct ItpError(ItpError_);
-
-impl From<ItpError_> for Error {
-	fn from(value: ItpError_) -> Self {
-		ItpError(value).into()
-	}
-}
-
-#[derive(Debug, thiserror::Error)]
-enum ItpError_ {
+enum ItpError {
 	#[error("not an itp file")]
 	NotItp,
 
@@ -60,9 +55,8 @@ enum ItpError_ {
 }
 
 macro_rules! bail {
-	($e:expr) => { { use ItpError_::*; Err($e)?; unreachable!() } }
+	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Itp {
@@ -673,14 +667,14 @@ fn ensure_size(value: usize, expected: usize) -> Result<(), Error> {
 pub impl Reader<'_> {
 	fn enum16<T: TryFromPrimitive<Primitive=u16,Error=TryFromPrimitiveError<T>>>(&mut self, field: &'static str) -> Result<T, Error> {
 		T::try_from_primitive(self.u16()?)
-			.map_err(|e| ItpError_::Invalid { field, value: e.number as u32 }.into())
+			.map_err(|e| ItpError::Invalid { field, value: e.number as u32 }.into())
 	}
 
 	fn bool16(&mut self, field: &'static str) -> Result<bool, Error> {
 		match self.u16()? {
 			0 => Ok(false),
 			1 => Ok(true),
-			v => Err(ItpError_::Invalid { field, value: v as u32 }.into())
+			v => Err(ItpError::Invalid { field, value: v as u32 }.into())
 		}
 	}
 }
