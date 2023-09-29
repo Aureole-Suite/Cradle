@@ -1,0 +1,5 @@
+[workspace]
+members = [
+	"cradle",
+]
+resolver = "2"
