@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use std::{borrow::Cow, ffi::CString};
+use std::ffi::CString;
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use gospel::read::{Reader, Le as _};
 use falcompress::bzip;
@@ -388,7 +388,6 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 	};
 
 	let mut pixels = vec![0; w*h];
-	println!("{:?}", (w, h, cw, ch, w%cw, h%ch));
 	for y in (0..h).step_by(ch) {
 		for x in (0..w).step_by(cw) {
 			let cw = cw.min(w-x);
@@ -403,9 +402,6 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 			}
 		}
 	}
-	println!("{} {} {} {}", w, h, w*h, pixels.len());
-	std::fs::write("/tmp/a.data", &pixels);
-	// print!("{:#1X}", f.dump());
 	ensure_end(f)?;
 
 	Ok(Itp {
@@ -689,155 +685,9 @@ pub impl Reader<'_> {
 	}
 }
 
-// #[cfg(test)]
-// #[filetest::filetest("../../samples/itp/*")]
-// fn test(bytes: &[u8]) -> Result<(), anyhow::Error> {
-// 	read(&mut Reader::new(bytes))?;
-// 	Ok(())
-// }
-
-// #[cfg(test)]
-// #[test]
-// fn test2() -> anyhow::Result<()> {
-// 	for dir in [
-// // 		"/home/fun/Aureole-Suite/Cradle/samples/itp/"
-// // "/home/large/kiseki/nayuta/system/",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/itp",
-// 		"/home/large/kiseki/sc-evo/data_sc/itp",
-// 		"/home/large/kiseki/ao-evo/data/face",
-// 		"/home/large/kiseki/sc-evo/data_sc/map/texture",
-// 		"/home/large/kiseki/fc-evo/data/itp",
-// 		"/home/large/kiseki/zero-evo/data/face",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/map/texture",
-// 		"/home/large/kiseki/fc-evo/data/map/texture",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/visual",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/face",
-// 		"/home/large/kiseki/ao-gf/data/face",
-// 		"/home/large/kiseki/ao-evo/data/visual",
-// 		"/home/large/kiseki/sc-evo/data_sc/visual",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/effect/texture",
-// 		"/home/large/kiseki/fc-evo/data/visual",
-// 		"/home/large/kiseki/zero-gf/data/face",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/extra",
-// 		"/home/large/kiseki/zero-evo/data/visual",
-// 		"/home/large/kiseki/ao-gf/data/visual",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/visual",
-// 		"/home/large/kiseki/sc-evo/data_sc/effect/texture",
-// 		"/home/large/kiseki/ao-evo/data/extra",
-// 		"/home/large/kiseki/sc-evo/data_sc/monsnote/ca_evo",
-// 		"/home/large/kiseki/sc-evo/data_sc/battle/symbol",
-// 		"/home/large/kiseki/ao-evo/data/monsnote",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/monsnote",
-// 		"/home/large/kiseki/ao-gf/data/monsnote",
-// 		"/home/large/kiseki/fc-evo/data/effect/texture",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/battle/symbol",
-// 		"/home/large/kiseki/ao-gf/data/battle/symbol",
-// 		"/home/large/kiseki/ao-evo/data/battle/symbol",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/extra",
-// 		"/home/large/kiseki/ao-gf/data/extra",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/battle/symbol",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/monsnote/ca_evo",
-// 		"/home/large/kiseki/zero-gf/data/visual",
-// 		"/home/large/kiseki/zero-gf/data/monsnote",
-// 		"/home/large/kiseki/zero-evo/data/monsnote",
-// 		"/home/large/kiseki/ys8/visual/topic",
-// 		"/home/large/kiseki/ys8/visual/help/ja",
-// 		"/home/large/kiseki/ys8/visual/help/fr",
-// 		"/home/large/kiseki/ys8/visual/help/en",
-// 		"/home/large/kiseki/zero-gf/data/battle/symbol",
-// 		"/home/large/kiseki/zero-evo/data/battle/symbol",
-// 		"/home/large/kiseki/ys7/visual",
-// 		"/home/large/kiseki/ys8/visual/tips/ja",
-// 		"/home/large/kiseki/ys8/visual/tips/fr",
-// 		"/home/large/kiseki/ys8/visual/tips/en",
-// 		"/home/large/kiseki/fc-evo/data/symbol",
-// 		"/home/large/kiseki/zero-evo/data/extra",
-// 		"/home/large/kiseki/zero-gf/data/extra",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/effect/texture",
-// 		"/home/large/kiseki/ao-gf/data/effect/texture",
-// 		"/home/large/kiseki/ao-evo/data/effect/texture",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/minimap",
-// 		"/home/large/kiseki/ys8/efx/tex",
-// 		"/home/large/kiseki/nayuta/visual/event",
-// 		"/home/large/kiseki/nayuta/visual/topic",
-// 		"/home/large/kiseki/ys8/efx/tex/ja",
-// 		"/home/large/kiseki/ys8/efx/tex/fr",
-// 		"/home/large/kiseki/ys8/efx/tex/en",
-// 		"/home/large/kiseki/ao-evo/data/minigame",
-// 		"/home/large/kiseki/fc-evo/data/monsnote/ca_evo",
-// 		"/home/large/kiseki/ys8/visual/map/fr",
-// 		"/home/large/kiseki/ys8/visual/map/en",
-// 		"/home/large/kiseki/ys8/visual/map/ja",
-// 		"/home/large/kiseki/ys8/visual/map",
-// 		"/home/large/kiseki/fc-evo/data/monsnote/ca",
-// 		"/home/large/kiseki/ys7/visual/topic",
-// 		"/home/large/kiseki/ys7/efx/tex",
-// 		"/home/large/kiseki/nayuta/efx/tex",
-// 		"/home/large/kiseki/ao-gf/data_en/visual",
-// 		"/home/large/kiseki/ao-gf/data_en/extra",
-// 		"/home/large/kiseki/ao-gf/data/etc",
-// 		"/home/large/kiseki/ao-evo/data/etc",
-// 		"/home/large/kiseki/ys8/visual/gallery/ja",
-// 		"/home/large/kiseki/ys8/visual/gallery/fr",
-// 		"/home/large/kiseki/ys8/visual/gallery/en",
-// 		"/home/large/kiseki/ys8/visual/gallery",
-// 		"/home/large/kiseki/sc-evo/data_sc/minimap",
-// 		"/home/large/kiseki/zero-evo/data/etc",
-// 		"/home/large/kiseki/ao-psp/PSP_GAME/USRDIR/data/etc",
-// 		"/home/large/kiseki/ys8/visual/mapname/ja",
-// 		"/home/large/kiseki/ys8/visual/mapname/fr",
-// 		"/home/large/kiseki/ys8/visual/mapname/en",
-// 		"/home/large/kiseki/zero-gf/data/etc",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/visual/sc",
-// 		"/home/large/kiseki/ys8/system",
-// 		"/home/large/kiseki/ys8/system/ja",
-// 		"/home/large/kiseki/ys8/system/fr",
-// 		"/home/large/kiseki/ys8/system/en",
-// 		"/home/large/kiseki/fc-evo/data/minimap",
-// 		"/home/large/kiseki/3rd-evo/data_3rd/battle",
-// 		"/home/large/kiseki/zero-gf/data/effect/texture",
-// 		"/home/large/kiseki/zero-evo/data/effect/texture",
-// 	] {
-// 		for f in std::fs::read_dir(dir)? {
-// 			let f = f?;
-// 			if f.path().is_file() {
-// 				let file = std::fs::File::open(f.path())?;
-// 				let dat = unsafe { memmap2::Mmap::map(&file)? };
-// 				println!("{}", f.path().display());
-// 				read(&mut Reader::new(&dat));
-// 			}
-// 		}
-// 	}
-// 	Ok(())
-// }
-
-// #[cfg(test)]
-// #[test]
-// fn test2() -> anyhow::Result<()> {
-// 	let text = std::fs::read_to_string("/tmp/ccpi.txt")?;
-// 	for path in text.lines() {
-// 		let file = std::fs::File::open(path)?;
-// 		let dat = unsafe { memmap2::Mmap::map(&file)? };
-// 		let val = read(&mut Reader::new(&dat));
-// 		if let Err(err) = val {
-// 			println!("{}", path);
-// 			println!("{:#}", err);
-// 		}
-// 	}
-// 	Ok(())
-// }
-
-
 #[cfg(test)]
-#[test]
-fn test3() -> anyhow::Result<()> {
-	let path = "/home/large/kiseki/ao-gf/data/visual/c_vis289.itp";
-	let file = std::fs::File::open(path)?;
-	let dat = unsafe { memmap2::Mmap::map(&file)? };
-	let val = read(&mut Reader::new(&dat));
-	if let Err(err) = val {
-		println!("{}", path);
-		println!("{:#}", err);
-	}
+#[filetest::filetest("../../samples/itp/*")]
+fn test(bytes: &[u8]) -> Result<(), anyhow::Error> {
+	read(&mut Reader::new(bytes))?;
 	Ok(())
 }
