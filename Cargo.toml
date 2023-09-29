@@ -1,5 +1,6 @@
 [workspace]
 members = [
 	"cradle",
+	"cradle-dds",
 ]
 resolver = "2"
