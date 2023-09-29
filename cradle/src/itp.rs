@@ -685,3 +685,45 @@ fn test(bytes: &[u8]) -> Result<(), anyhow::Error> {
 	read(&mut Reader::new(bytes))?;
 	Ok(())
 }
+
+#[cfg(test)]
+#[test]
+fn test_png() -> anyhow::Result<()> {
+	let path = "../samples/itp/ao_gf__c_vis289.itp";
+	let file = std::fs::File::open(path)?;
+	let dat = unsafe { memmap2::Mmap::map(&file)? };
+	let itp = read(&mut Reader::new(&dat))?;
+	let Itp { status: _, width, height, data } = itp;
+	let ImageData::Indexed(Palette::Embedded(palette), data) = data else { panic!() };
+	write_indexed_png(std::fs::File::create("/tmp/a.png")?, width, height, &palette, &data)?;
+
+	Ok(())
+}
+
+#[cfg(test)]
+fn write_indexed_png(
+	mut w: impl std::io::Write,
+	width: u32,
+	height: u32,
+	palette: &[u32],
+	data: &[u8],
+) -> Result<(), anyhow::Error> {
+	let mut png = png::Encoder::new(&mut w, width, height);
+	let mut pal = Vec::with_capacity(3*palette.len());
+	let mut alp = Vec::with_capacity(palette.len());
+	for rgba in palette {
+		let [r, g, b, a] = u32::to_le_bytes(*rgba);
+		pal.push(r);
+		pal.push(g);
+		pal.push(b);
+		alp.push(a);
+	}
+	png.set_color(png::ColorType::Indexed);
+	png.set_depth(png::BitDepth::Eight);
+	png.set_palette(pal);
+	png.set_trns(alp);
+	let mut w = png.write_header()?;
+	w.write_image_data(data)?;
+	w.finish()?;
+	Ok(())
+}
