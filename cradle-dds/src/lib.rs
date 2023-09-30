@@ -1,27 +1,22 @@
 pub mod dds;
 
 pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
-	match &itp.data {
+	let mut header = dds::Dds {
+		height: itp.height,
+		width: itp.width,
+		..dds::Dds::default()
+	};
+	let data = match &itp.data {
 		cradle::itp::ImageData::Indexed(pal, data) => {
-			let header = dds::Dds {
-				flags: dds::DDSD::DEFAULT,
-				height: itp.height,
-				width: itp.width,
-				pixel_format: dds::PixelFormat {
-					flags: dds::DDPF::RGB | dds::DDPF::ALPHAPIXELS | dds::DDPF::PALETTEINDEXED8,
-					rgb_bit_count: 8,
-					..dds::PixelFormat::default()
-				},
-				..dds::Dds::default()
-			};
 			let cradle::itp::Palette::Embedded(pal) = pal else {
 				panic!("external palette not supported");
 			};
-			let data = pal.iter()
+			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
+			header.pixel_format.rgb_bit_count = 8;
+			pal.iter()
 				.flat_map(|a| u32::to_le_bytes(*a))
 				.chain(data.iter().copied())
-				.collect();
-			(header, data)
+				.collect()
 		}
 		cradle::itp::ImageData::Argb16_1(_) => todo!(),
 		cradle::itp::ImageData::Argb16_2(_) => todo!(),
@@ -31,7 +26,8 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
 		cradle::itp::ImageData::Bc2(_) => todo!(),
 		cradle::itp::ImageData::Bc3(_) => todo!(),
 		cradle::itp::ImageData::Bc7(_) => todo!(),
-	}
+	};
+	(header, data)
 }
 
 #[cfg(test)]
