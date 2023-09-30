@@ -13,7 +13,9 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
 			};
 			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
 			header.pixel_format.rgb_bit_count = 8;
-			pal.iter()
+			let mut pal2 = [0; 256];
+			pal2[..pal.len()].copy_from_slice(pal);
+			pal2.iter()
 				.flat_map(|a| u32::to_le_bytes(*a))
 				.chain(data.iter().copied())
 				.collect()
