@@ -78,7 +78,7 @@ pub enum ImageData {
 	Argb16_1(Vec<u16>),
 	Argb16_2(Vec<u16>),
 	Argb16_3(Vec<u16>),
-	Argb32(Vec<u16>),
+	Argb32(Vec<u32>),
 	Bc1(Vec<u64>),
 	Bc2(Vec<[u64; 2]>),
 	Bc3(Vec<[u64; 2]>),
@@ -581,6 +581,11 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 		BFT::Indexed3 => {
 			panic!("CCPI is not supported for revision 3")
 		}
+		BFT::Argb32 => {
+			let data = read_maybe_compressed(f, status.compression, len)?;
+			let data = data.array_chunks().copied().map(u32::from_le_bytes).collect();
+			Ok(ImageData::Argb32(data))
+		}
 		_ => {
 			bail!(TODO)
 		}
@@ -723,14 +728,36 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
 #[cfg(test)]
 #[test]
 fn test_png() -> anyhow::Result<()> {
-	let path = "../samples/itp/ao_gf__c_vis289.itp";
+	let path = "../samples/itp/ys_celceta__f_00409.itp";
 	let file = std::fs::File::open(path)?;
 	let dat = unsafe { memmap2::Mmap::map(&file)? };
 	let itp = read(&mut Reader::new(&dat))?;
 	let Itp { status: _, width, height, data } = itp;
-	let ImageData::Indexed(Palette::Embedded(palette), data) = data else { panic!() };
-	write_indexed_png(std::fs::File::create("/tmp/a.png")?, width, height, &palette, &data)?;
+	let ImageData::Argb32(data) = data else { panic!() };
+	write_png(std::fs::File::create("/tmp/a.png")?, width, height, &data)?;
 
+	Ok(())
+}
+
+#[cfg(test)]
+fn write_png(
+	mut w: impl std::io::Write,
+	width: u32,
+	height: u32,
+	data: &[u32],
+) -> Result<(), anyhow::Error> {
+	let mut png = png::Encoder::new(&mut w, width, height);
+	png.set_color(png::ColorType::Rgba);
+	png.set_depth(png::BitDepth::Eight);
+	let mut w = png.write_header()?;
+	let data: Vec<u8> =  data.iter()
+		.flat_map(|argb| {
+			let [b, g, r, a] = u32::to_le_bytes(*argb);
+			[r, g, b, a]
+		})
+		.collect::<Vec<_>>();
+	w.write_image_data(&data)?;
+	w.finish()?;
 	Ok(())
 }
 
