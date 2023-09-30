@@ -67,6 +67,8 @@ dependencies = [
 name = "cradle-dds"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "cradle",
  "gospel",
  "thiserror",
 ]
