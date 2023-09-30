@@ -453,8 +453,8 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 
 	loop {
 		let fourcc = f.array::<4>()?;
-		let size = f.u32()?;
-		let mut f = Reader::new(f.slice(size as usize)?);
+		let _size = f.u32()? as usize;
+		// Size is incorrect on both IPAL-having files I have
 		match &fourcc {
 			b"IHDR" => {
 				f.check_u32(32)?;
@@ -467,11 +467,13 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				status.pixel_bit_format = f.enum16("IHDR.pixel_bit_format")?;
 				status.compression = f.enum16("IHDR.compression")?;
 				status.multi_plane = f.enum16("IHDR.multi_plane")?;
+				f.check_u32(0)?;
 			}
 
 			b"IALP" => {
 				f.check_u32(8)?;
 				status.use_alpha = f.bool16("IALP.use_alpha")?;
+				f.check_u16(0)?;
 			}
 
 			b"IMIP" => {
@@ -485,19 +487,24 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				f.check_u32(8)?;
 				let is_external = f.bool16("IPAL.is_external")?;
 				let pal_size = f.u16()? as usize;
-				read_ipal(&mut f, &status, is_external, pal_size)?;
+				read_ipal(f, &status, is_external, pal_size)?;
 			}
 
 			b"IDAT" => {
 				f.check_u32(8)?;
-				f.u16()?;
+				f.check_u16(0)?;
 				let mip_nr = f.u16()?;
 
-				let data = read_idat(&mut f, &status, width, height)?;
+				let data = read_idat(f, &status, width, height)?;
 			}
 
 			b"IEXT" => unimplemented!(),
-			b"IHAS" => {}
+
+			b"IHAS" => {
+				f.check_u32(16)?;
+				f.check_u32(0)?;
+				f.array::<8>()?;
+			}
 
 			b"IEND" => break,
 			_ => bail!(BadChunk { fourcc })
@@ -560,7 +567,7 @@ fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> R
 	use CompressionType as CT;
 	let data = match comp {
 		CT::None => f.slice(len)?.to_vec(),
-		CT::Bz_1 | CT::C77 => freadp(f)?,
+		CT::Bz_1 | CT::C77 => freadp(f, Some(len))?,
 		CT::Bz_2 => freadp_multi(f, len)?,
 	};
 	ensure_size(data.len(), len)?;
@@ -570,19 +577,21 @@ fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> R
 fn freadp_multi(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 	let mut out = Vec::new();
 	while out.len() < len {
-		out.extend(freadp(f)?)
+		out.extend(freadp(f, None)?)
 	}
 	Ok(out)
 }
 
-fn freadp(f: &mut Reader) -> Result<Vec<u8>, Error> {
+fn freadp(f: &mut Reader, expected_len: Option<usize>) -> Result<Vec<u8>, Error> {
 	if f.check_u32(0x80000001).is_ok() {
 		let n_chunks = f.u32()? as usize;
 		let total_csize = f.u32()? as usize;
 		let buf_size = f.u32()? as usize;
 		let total_usize = f.u32()? as usize;
-		ensure_size(f.pos() + total_csize, f.len())?;
-		// ensure!(total_usize == capacity, "itp32: invalid total uncompressed size");
+		if let Some(len) = expected_len {
+			ensure_size(total_usize, len)?;
+		}
+		let f = &mut Reader::new(f.slice(total_csize)?);
 
 		let mut data = Vec::new();
 		let mut max_csize = 0;
@@ -591,8 +600,9 @@ fn freadp(f: &mut Reader) -> Result<Vec<u8>, Error> {
 			decompress_c77(f, &mut data)?;
 			max_csize = max_csize.max(f.pos() - start);
 		}
-		ensure_size(buf_size, max_csize)?;
-		ensure_size(total_usize, data.len())?;
+		ensure_size(max_csize, buf_size)?;
+		ensure_size(data.len(), total_usize)?;
+		ensure_end(f)?;
 		Ok(data)
 	} else {
 		Ok(bzip::decompress_ed7(f)?)
@@ -681,7 +691,7 @@ pub impl Reader<'_> {
 
 #[cfg(test)]
 #[filetest::filetest("../../samples/itp/*")]
-fn test(bytes: &[u8]) -> Result<(), anyhow::Error> {
+fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
 	read(&mut Reader::new(bytes))?;
 	Ok(())
 }
