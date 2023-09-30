@@ -107,7 +107,7 @@ pub struct PixelFormat {
 }
 
 impl PixelFormat {
-	pub fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
+	fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
 		f.check_u32(32)?;
 		Ok(PixelFormat {
 			flags: f.u32()?,
@@ -120,7 +120,7 @@ impl PixelFormat {
 		})
 	}
 
-	pub fn write(&self, f: &mut Writer) {
+	fn write(&self, f: &mut Writer) {
 		f.u32(32);
 		f.u32(self.flags);
 		f.array(self.four_cc);
@@ -161,7 +161,7 @@ pub struct Dx10Header {
 }
 
 impl Dx10Header {
-	pub fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
+	fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
 		Ok(Dx10Header {
 			dxgi_format: f.u32()?,
 			resource_dimension: f.u32()?,
@@ -171,7 +171,7 @@ impl Dx10Header {
 		})
 	}
 
-	pub fn write(&self, f: &mut Writer) {
+	fn write(&self, f: &mut Writer) {
 		f.u32(self.dxgi_format);
 		f.u32(self.resource_dimension);
 		f.u32(self.misc_flag);
