@@ -50,6 +50,12 @@ enum ItpError {
 	#[error("ccpi only supports versions 6 and 7, got {0}")]
 	CcpiVersion(u16),
 
+	#[error("got a palette on a non-indexed format")]
+	PalettePresent,
+
+	#[error("no palette is present for indexed format")]
+	PaletteMissing,
+
 	#[error("TODO")]
 	TODO
 }
@@ -338,14 +344,21 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	let width = f.u32()? as usize;
 	let height = f.u32()? as usize;
 
-	if status.base_format.is_indexed() {
+	let pal = if status.base_format.is_indexed() {
 		let pal_size = if matches!(head, 1000 | 1002) { 256 } else { f.u32()? as usize };
-		let ipal = read_ipal(f, &status, false, pal_size)?;
-	}
+		Some(read_ipal(f, &status, false, pal_size)?)
+	} else {
+		None
+	};
 
-	let idat = read_idat(f, &status, width, height)?;
+	let data = read_idat(f, &status, width, height, pal.as_ref())?;
 
-	bail!(TODO);
+	Ok(Itp {
+		status,
+		width: width as u32,
+		height: width as u32,
+		data,
+	})
 }
 
 fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
@@ -450,6 +463,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	let mut has_mip = false;
 	let mut n_mip = 0;
 	let mut status = ItpStatus::default();
+	let mut pal = None;
 
 	loop {
 		let fourcc = f.array::<4>()?;
@@ -487,15 +501,14 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				f.check_u32(8)?;
 				let is_external = f.bool16("IPAL.is_external")?;
 				let pal_size = f.u16()? as usize;
-				read_ipal(f, &status, is_external, pal_size)?;
+				pal = Some(read_ipal(f, &status, is_external, pal_size)?);
 			}
 
 			b"IDAT" => {
 				f.check_u32(8)?;
 				f.check_u16(0)?;
 				let mip_nr = f.u16()?;
-
-				let data = read_idat(f, &status, width, height)?;
+				let data = read_idat(f, &status, width, height, pal.as_ref())?;
 			}
 
 			b"IEXT" => unimplemented!(),
@@ -535,17 +548,23 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 	}
 }
 
-fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize) -> Result<Vec<u8>, Error> {
+fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, palette: Option<&Palette>) -> Result<ImageData, Error> {
 	use BaseFormatType as BFT;
 	let bft = status.base_format;
 	let len = width * height * bft.bpp() / 8;
-	let data = match bft {
+	if palette.is_some() && !bft.is_indexed() {
+		bail!(PalettePresent);
+	}
+	if palette.is_none() && bft.is_indexed() {
+		bail!(PaletteMissing);
+	}
+	match bft {
 		BFT::Indexed1 => {
 			let mut data = read_maybe_compressed(f, status.compression, len)?;
 			if status.pixel_format == PixelFormatType::Pfp_1 {
 				swizzle_mut(&mut data, height/8, width/16, 8, 16);
 			}
-			data
+			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
 		BFT::Indexed2 => {
 			bail!(TODO)
@@ -559,8 +578,7 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize) ->
 		_ => {
 			bail!(TODO)
 		}
-	};
-	Ok(data)
+	}
 }
 
 fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> Result<Vec<u8>, Error> {
