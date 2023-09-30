@@ -464,6 +464,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	let mut n_mip = 0;
 	let mut status = ItpStatus::default();
 	let mut pal = None;
+	let mut data = None;
 
 	loop {
 		let fourcc = f.array::<4>()?;
@@ -508,7 +509,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				f.check_u32(8)?;
 				f.check_u16(0)?;
 				let mip_nr = f.u16()?;
-				let data = read_idat(f, &status, width, height, pal.as_ref())?;
+				data = Some(read_idat(f, &status, width, height, pal.as_ref())?);
 			}
 
 			b"IEXT" => unimplemented!(),
@@ -524,7 +525,12 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		}
 	}
 
-	bail!(TODO);
+	Ok(Itp {
+		status,
+		width: width as u32,
+		height: height as u32,
+		data: data.unwrap(), // XXX
+	})
 }
 
 fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
