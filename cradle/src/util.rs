@@ -72,7 +72,7 @@ pub unsafe fn apply_permutation<T>(slice: &mut [T], permutation: impl Iterator<I
 pub fn swizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
 	assert_eq!(slice.len(), w * h);
 	assert_eq!(w % cw, 0);
-	assert_eq!(h % h, 0);
+	assert_eq!(h % ch, 0);
 	// SAFETY: iter_swizzle is a permutation
 	unsafe {
 		permute_mut(slice, iter_swizzle(h/ch, w/cw, ch, cw));
@@ -83,7 +83,7 @@ pub fn swizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize)
 pub fn unswizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
 	assert_eq!(slice.len(), w * h);
 	assert_eq!(w % cw, 0);
-	assert_eq!(h % h, 0);
+	assert_eq!(h % ch, 0);
 	// SAFETY: iter_swizzle is a permutation
 	unsafe {
 		unpermute_mut(slice, iter_swizzle(h/ch, w/cw, ch, cw));
