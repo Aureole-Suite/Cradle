@@ -13,7 +13,7 @@ pub fn iter_swizzle(a: usize, b: usize, c: usize, d: usize) -> impl Iterator<Ite
 }
 
 #[inline(always)]
-pub fn iter_morton(w: usize, h: usize) -> impl Iterator<Item=usize> {
+pub fn iter_morton(h: usize, w: usize) -> impl Iterator<Item=usize> {
 	(0..w*h).map(move |a| {
 		let mut x = 0;
 		let mut y = 0;
@@ -91,19 +91,19 @@ pub fn unswizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usiz
 }
 
 #[inline]
-pub fn morton_mut<T>(slice: &mut [T], width: usize, height: usize) {
+pub fn morton_mut<T>(slice: &mut [T], height: usize, width: usize) {
 	assert_eq!(slice.len(), width * height);
 	// SAFETY: iter_morton is a permutation
 	unsafe {
-		permute_mut(slice, iter_morton(width, height));
+		permute_mut(slice, iter_morton(height, width));
 	}
 }
 
 #[inline]
-pub fn unmorton_mut<T>(slice: &mut [T], width: usize, height: usize) {
+pub fn unmorton_mut<T>(slice: &mut [T], height: usize, width: usize) {
 	assert_eq!(slice.len(), width * height);
 	// SAFETY: iter_morton is a permutation
 	unsafe {
-		unpermute_mut(slice, iter_morton(width, height));
+		unpermute_mut(slice, iter_morton(height, width));
 	}
 }
