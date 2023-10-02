@@ -167,13 +167,13 @@ impl ItpStatus {
 		let pixel_format = bits! {
 			10 => PFT::Pfp_1,
 			11 => PFT::Linear,
-			12 => PFT::Tile_1,
+			12 => PFT::Pfp_2,
 			13 => if f & (7 << 24) != 0 { // For DXT formats
 				PFT::Linear
 			} else {
-				PFT::Swizzle_1
+				PFT::Pfp_3
 			},
-			14 => PFT::Ps4Tile,
+			14 => PFT::Pfp_4,
 			_ => bail!(MissingFlag("pixel format"))
 		};
 
@@ -277,10 +277,10 @@ enum PixelFormatType {
 	#[default]
 	Linear = 0,
 	Pfp_1 = 1,
-	Tile_1 = 2,
-	Swizzle_1 = 3,
-	Ps4Tile = 4, // aka Tile
-	Morton = 5, // aka Swizzle
+	Pfp_2 = 2, // aka Tile
+	Pfp_3 = 3, // aka Swizzle
+	Pfp_4 = 4, // aka Tile or PS4Tile
+	Pfp_5 = 5, // aka Swizzle or Morton
 	Pfp_6 = 6,
 	Pfp_7 = 7,
 	Pfp_8 = 8,
@@ -366,15 +366,15 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: Pixe
 	match pixel_format {
 		PFT::Linear => {},
 		PFT::Pfp_1 => unswizzle_mut(data, height, width, 8, 16),
-		PFT::Tile_1 => unswizzle_mut(data, height, width, 32, 32),
-		PFT::Swizzle_1 => unmorton_mut(data, height, width),
-		PFT::Ps4Tile => {
+		PFT::Pfp_2 => unswizzle_mut(data, height, width, 32, 32),
+		PFT::Pfp_3 => unmorton_mut(data, height, width),
+		PFT::Pfp_4 => {
 			for a in data.array_chunks_mut::<64>() {
 				unmorton_mut(a, 8, 8);
 			}
 			unswizzle_mut(data, height, width, 8, 1)
 		}
-		PFT::Morton => todo!("Morton"),
+		PFT::Pfp_5 => todo!("Pfp_5"),
 		PFT::Pfp_6 => todo!("Pfp_6"),
 		PFT::Pfp_7 => todo!("Pfp_7"),
 		PFT::Pfp_8 => todo!("Pfp_8"),
