@@ -313,15 +313,17 @@ enum MipmapType {
 }
 
 pub fn read(f: &mut Reader) -> Result<Itp, Error> {
-	use BaseFormatType as BFT;
+	const ITP: u32 = u32::from_le_bytes(*b"ITP\xFF");
+	const PNG: u32 = u32::from_le_bytes(*b"\x89PNG");
+	const DDS: u32 = u32::from_le_bytes(*b"DDS ");
 
 	let head = f.u32()?;
-	if head == u32::from_le_bytes(*b"ITP\xFF") {
-		f.seek(f.pos() - 4)?;
-		return read_revision_3(f);
-	}
-
 	let flags = match head {
+		PNG | DDS => bail!(NotItp),
+		ITP => {
+			f.seek(f.pos() - 4)?;
+			return read_revision_3(f);
+		}
 		999  => 0x108802, // Argb16_2, None, Linear
 		1000 => 0x108801, // Indexed1, None, Linear
 		1001 => 0x110802, // Argb16_2, Bz_1, Linear
@@ -335,7 +337,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	};
 	let status = ItpStatus::from_flags(flags)?;
 
-	if status.base_format == BFT::Indexed3 {
+	if status.base_format == BaseFormatType::Indexed3 {
 		return read_ccpi(f, status);
 	}
 
