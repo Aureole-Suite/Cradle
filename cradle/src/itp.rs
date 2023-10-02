@@ -474,7 +474,6 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	let mut width = 0;
 	let mut height = 0;
 	let mut file_size = 0;
-	let mut has_mip = false;
 	let mut n_mip = 0;
 	let mut status = ItpStatus::default();
 	let mut pal = None;
@@ -539,6 +538,8 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		}
 	}
 
+	ensure_size(f.pos() - start, file_size)?;
+
 	Ok(Itp {
 		status,
 		width: width as u32,
@@ -571,7 +572,6 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, palette: Option<&Palette>) -> Result<ImageData, Error> {
 	use BaseFormatType as BFT;
 	let bft = status.base_format;
-	let len = width * height * bft.bpp() / 8;
 	if palette.is_some() && !bft.is_indexed() {
 		bail!(PalettePresent);
 	}
