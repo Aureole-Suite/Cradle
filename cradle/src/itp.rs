@@ -5,7 +5,7 @@ use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use gospel::read::{Reader, Le as _};
 use falcompress::bzip;
 
-use crate::util::{unswizzle_mut, unmorton_mut};
+use crate::permute::{unswizzle_mut, unmorton_mut};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
