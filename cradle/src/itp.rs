@@ -280,10 +280,6 @@ enum PixelFormatType {
 	Pfp_2 = 2, // aka Tile
 	Pfp_3 = 3, // aka Swizzle
 	Pfp_4 = 4, // aka Tile or PS4Tile
-	Pfp_5 = 5, // aka Swizzle or Morton
-	Pfp_6 = 6,
-	Pfp_7 = 7,
-	Pfp_8 = 8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
@@ -376,10 +372,6 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: Pixe
 			}
 			unswizzle_mut(data, height, width, 8, 1)
 		}
-		PFT::Pfp_5 => todo!("Pfp_5"),
-		PFT::Pfp_6 => todo!("Pfp_6"),
-		PFT::Pfp_7 => todo!("Pfp_7"),
-		PFT::Pfp_8 => todo!("Pfp_8"),
 	}
 }
 
