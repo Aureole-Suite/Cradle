@@ -366,7 +366,7 @@ fn do_swizzle<T: Clone>(data: &mut [T], width: usize, height: usize, pixel_forma
 	match pixel_format {
 		PFT::Linear => {},
 		PFT::Pfp_1 => unswizzle_mut(data, height/8, width/16, 8, 16),
-		PFT::Tile_1 => todo!("Tile_1"),
+		PFT::Tile_1 => unswizzle_mut(data, height/32, width/32, 32, 32),
 		PFT::Swizzle_1 => unmorton_mut(data, height, width),
 		PFT::Ps4Tile => todo!("PS4Tile"),
 		PFT::Morton => todo!("Morton"),
