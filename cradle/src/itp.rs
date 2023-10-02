@@ -361,14 +361,19 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	})
 }
 
-fn do_swizzle<T: Clone>(data: &mut [T], width: usize, height: usize, pixel_format: PixelFormatType) {
+fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PixelFormatType) {
 	use PixelFormatType as PFT;
 	match pixel_format {
 		PFT::Linear => {},
 		PFT::Pfp_1 => unswizzle_mut(data, height, width, 8, 16),
 		PFT::Tile_1 => unswizzle_mut(data, height, width, 32, 32),
 		PFT::Swizzle_1 => unmorton_mut(data, height, width),
-		PFT::Ps4Tile => todo!("PS4Tile"),
+		PFT::Ps4Tile => {
+			for a in data.array_chunks_mut::<64>() {
+				unmorton_mut(a, 8, 8);
+			}
+			unswizzle_mut(data, height, width, 8, 1)
+		}
 		PFT::Morton => todo!("Morton"),
 		PFT::Pfp_6 => todo!("Pfp_6"),
 		PFT::Pfp_7 => todo!("Pfp_7"),
