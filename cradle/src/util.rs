@@ -21,8 +21,21 @@ pub fn iter_morton(h: usize, w: usize) -> impl Iterator<Item=usize> {
 			x |= usize::from(a & (2<<(2*b)) != 0) << b;
 			y |= usize::from(a & (1<<(2*b)) != 0) << b;
 		}
-		y*w+x
+		(y%h)*w+(y/h)*h+x
 	})
+}
+
+#[test]
+fn test_morton() {
+	let mut mort = iter_morton(256, 512).collect::<Vec<_>>();
+	mort.sort();
+	let sort = (0..mort.len()).collect::<Vec<_>>();
+	assert_eq!(mort, sort);
+
+	let mut mort = iter_morton(512, 256).collect::<Vec<_>>();
+	mort.sort();
+	let sort = (0..mort.len()).collect::<Vec<_>>();
+	assert_eq!(mort, sort);
 }
 
 /// # Safety
