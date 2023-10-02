@@ -365,8 +365,8 @@ fn do_swizzle<T: Clone>(data: &mut [T], width: usize, height: usize, pixel_forma
 	use PixelFormatType as PFT;
 	match pixel_format {
 		PFT::Linear => {},
-		PFT::Pfp_1 => unswizzle_mut(data, height/8, width/16, 8, 16),
-		PFT::Tile_1 => unswizzle_mut(data, height/32, width/32, 32, 32),
+		PFT::Pfp_1 => unswizzle_mut(data, height, width, 8, 16),
+		PFT::Tile_1 => unswizzle_mut(data, height, width, 32, 32),
 		PFT::Swizzle_1 => unmorton_mut(data, height, width),
 		PFT::Ps4Tile => todo!("PS4Tile"),
 		PFT::Morton => todo!("Morton"),
@@ -415,7 +415,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 			let cw = cw.min(w-x);
 			let ch = ch.min(h-y);
 			let mut chunk = read_ccpi_chunk(f, cw * ch)?;
-			unswizzle_mut(&mut chunk, ch/2, cw/2, 2, 2);
+			unswizzle_mut(&mut chunk, ch, cw, 2, 2);
 			let mut it = chunk.into_iter();
 			for y in y..y+ch {
 				for x in x..x+cw {
@@ -641,7 +641,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 		data.extend(chunk);
 	}
 
-	unswizzle_mut(&mut data, height/8, width/16, 8, 16);
+	unswizzle_mut(&mut data, height, width, 8, 16);
 	Ok(data)
 }
 

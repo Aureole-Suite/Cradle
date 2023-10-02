@@ -68,42 +68,25 @@ pub unsafe fn apply_permutation<T>(slice: &mut [T], permutation: impl Iterator<I
 	}
 }
 
-/// Swaps the inner two axes of a slice representing a 4D array.
-///
-/// The inverse of `swizzle(slice, a, b, c, d)` is `swizzle(slice, a, c, b, d)`.
-///
-/// # Panics
-/// This function panics if the slice's length is not equal to `a * b * c * d`.
 #[inline]
-pub fn swizzle<T: Clone>(slice: &[T], a: usize, b: usize, c: usize, d: usize) -> Vec<T> {
-	assert_eq!(slice.len(), a * b * c * d);
-	iter_swizzle(a, b, c, d)
-		.map(|a| slice[a].clone())
-		.collect()
-}
-
-/// Same as [`swizzle`], but operates in place.
-///
-/// This function does not clone or drop any elements, so no `Clone` bound is needed.
-///
-/// # Panics
-/// This function panics if the slice's length is not equal to `a * b * c * d`.
-#[inline]
-pub fn swizzle_mut<T>(slice: &mut [T], a: usize, b: usize, c: usize, d: usize) {
-	assert_eq!(slice.len(), a * b * c * d);
+pub fn swizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
+	assert_eq!(slice.len(), w * h);
+	assert_eq!(w % cw, 0);
+	assert_eq!(h % h, 0);
 	// SAFETY: iter_swizzle is a permutation
 	unsafe {
-		permute_mut(slice, iter_swizzle(a, b, c, d));
+		permute_mut(slice, iter_swizzle(h/ch, w/cw, ch, cw));
 	}
 }
 
-
 #[inline]
-pub fn unswizzle_mut<T>(slice: &mut [T], a: usize, b: usize, c: usize, d: usize) {
-	assert_eq!(slice.len(), a * b * c * d);
+pub fn unswizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
+	assert_eq!(slice.len(), w * h);
+	assert_eq!(w % cw, 0);
+	assert_eq!(h % h, 0);
 	// SAFETY: iter_swizzle is a permutation
 	unsafe {
-		unpermute_mut(slice, iter_swizzle(a, b, c, d));
+		unpermute_mut(slice, iter_swizzle(h/ch, w/cw, ch, cw));
 	}
 }
 
