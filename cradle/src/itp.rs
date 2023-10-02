@@ -5,7 +5,7 @@ use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use gospel::read::{Reader, Le as _};
 use falcompress::bzip;
 
-use crate::util::swizzle_mut;
+use crate::util::{unswizzle_mut, unmorton_mut};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -56,8 +56,8 @@ enum ItpError {
 	#[error("no palette is present for indexed format")]
 	PaletteMissing,
 
-	#[error("TODO")]
-	TODO
+	#[error("TODO: {0}")]
+	TODO(String)
 }
 
 macro_rules! bail {
@@ -361,6 +361,21 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	})
 }
 
+fn do_swizzle<T: Clone>(data: &mut [T], width: usize, height: usize, pixel_format: PixelFormatType) {
+	use PixelFormatType as PFT;
+	match pixel_format {
+		PFT::Linear => {},
+		PFT::Pfp_1 => unswizzle_mut(data, height/8, width/16, 8, 16),
+		PFT::Tile_1 => todo!("Tile_1"),
+		PFT::Swizzle_1 => unmorton_mut(data, height, width),
+		PFT::Ps4Tile => todo!("PS4Tile"),
+		PFT::Morton => todo!("Morton"),
+		PFT::Pfp_6 => todo!("Pfp_6"),
+		PFT::Pfp_7 => todo!("Pfp_7"),
+		PFT::Pfp_8 => todo!("Pfp_8"),
+	}
+}
+
 fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 	use CompressionType as CT;
 
@@ -400,7 +415,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 			let cw = cw.min(w-x);
 			let ch = ch.min(h-y);
 			let mut chunk = read_ccpi_chunk(f, cw * ch)?;
-			swizzle_mut(&mut chunk, ch/2, 2, cw/2, 2);
+			unswizzle_mut(&mut chunk, ch/2, cw/2, 2, 2);
 			let mut it = chunk.into_iter();
 			for y in y..y+ch {
 				for x in x..x+cw {
@@ -535,7 +550,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 
 fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
 	if is_external {
-		bail!(TODO);
+		bail!(TODO(String::from("External IPAL")));
 	} else {
 		let data = read_maybe_compressed(f, status.compression, size * 4)?;
 
@@ -567,17 +582,16 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 	match bft {
 		BFT::Indexed1 => {
 			let mut data = read_maybe_compressed(f, status.compression, len)?;
-			if status.pixel_format == PixelFormatType::Pfp_1 {
-				swizzle_mut(&mut data, height/8, width/16, 8, 16);
-			}
+			do_swizzle(&mut data, width, height, status.pixel_format);
 			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
 		BFT::Indexed2 => {
 			let size = f.u32()? as usize;
 			let data = read_maybe_compressed(f, status.compression, size)?;
 			let g = &mut Reader::new(&data);
-			let data = a_fast_mode2(g, width, height)?;
+			let mut data = a_fast_mode2(g, width, height)?;
 			ensure_end(g)?;
+			do_swizzle(&mut data, width, height, status.pixel_format);
 			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
 		BFT::Indexed3 => {
@@ -585,11 +599,12 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 		}
 		BFT::Argb32 => {
 			let data = read_maybe_compressed(f, status.compression, len)?;
-			let data = data.array_chunks().copied().map(u32::from_le_bytes).collect();
+			let mut data = data.array_chunks().copied().map(u32::from_le_bytes).collect::<Vec<_>>();
+			do_swizzle(&mut data, width, height, status.pixel_format);
 			Ok(ImageData::Argb32(data))
 		}
 		_ => {
-			bail!(TODO)
+			bail!(TODO(format!("{:?}", bft)))
 		}
 	}
 }
@@ -626,7 +641,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 		data.extend(chunk);
 	}
 
-	swizzle_mut(&mut data, height/8, 8, width/16, 16);
+	unswizzle_mut(&mut data, height/8, width/16, 8, 16);
 	Ok(data)
 }
 
