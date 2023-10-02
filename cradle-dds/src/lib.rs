@@ -23,7 +23,11 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
 		cradle::itp::ImageData::Argb16_1(_) => todo!(),
 		cradle::itp::ImageData::Argb16_2(_) => todo!(),
 		cradle::itp::ImageData::Argb16_3(_) => todo!(),
-		cradle::itp::ImageData::Argb32(_) => todo!(),
+		cradle::itp::ImageData::Argb32(data) => {
+			data.iter().copied()
+				.flat_map(u32::to_le_bytes)
+				.collect()
+		},
 		cradle::itp::ImageData::Bc1(_) => todo!(),
 		cradle::itp::ImageData::Bc2(_) => todo!(),
 		cradle::itp::ImageData::Bc3(_) => todo!(),
@@ -37,7 +41,7 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
 fn test_dds() -> anyhow::Result<()> {
 	use std::io::Write;
 
-	let path = "../samples/itp/ao_gf__c_vis289.itp";
+	let path = "../samples/itp/ys_celceta__f_00409.itp";
 	let dat = std::fs::read(path)?;
 	let itp = cradle::itp::read(&mut gospel::read::Reader::new(&dat))?;
 	let (dds, data) = to_dds(&itp);
