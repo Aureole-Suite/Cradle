@@ -5,15 +5,15 @@ pub fn bc1(block: u64) -> [u32; 16] {
 	let bits = (block >> 32) as u32;
 	let colors = if c0 > c1 {
 		[
-			lerp(c0, c1, 3, 0),
-			lerp(c0, c1, 3, 1),
-			lerp(c0, c1, 3, 2),
+			lerp(c0, c1, 0, 3),
+			lerp(c0, c1, 1, 3),
+			lerp(c0, c1, 2, 3),
 			lerp(c0, c1, 3, 3),
 		]
 	} else {
 		[
-			lerp(c0, c1, 2, 0),
-			lerp(c0, c1, 2, 1),
+			lerp(c0, c1, 0, 2),
+			lerp(c0, c1, 1, 2),
 			lerp(c0, c1, 2, 2),
 			0x00000000,
 		]
