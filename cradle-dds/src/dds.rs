@@ -72,6 +72,8 @@ impl Dds {
 		if let Some(dx10) = &self.dx10 {
 			assert_eq!(self.pixel_format.four_cc, *b"DX10");
 			dx10.write(f);
+		} else {
+			assert_ne!(self.pixel_format.four_cc, *b"DX10");
 		}
 	}
 }
@@ -177,5 +179,17 @@ impl Dx10Header {
 		f.u32(self.misc_flag);
 		f.u32(self.array_size);
 		f.u32(self.misc_flag2);
+	}
+}
+
+impl Default for Dx10Header {
+	fn default() -> Self {
+		Self {
+			dxgi_format: DXGI_FORMAT::B8G8R8A8_UNORM,
+			resource_dimension: RESOURCE_DIMENSION::TEXTURE2D,
+			misc_flag: 0,
+			array_size: 1,
+			misc_flag2: 0,
+		}
 	}
 }

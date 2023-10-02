@@ -80,8 +80,8 @@ pub enum ImageData {
 	Argb16_3(Vec<u16>),
 	Argb32(Vec<u32>),
 	Bc1(Vec<u64>),
-	Bc2(Vec<[u64; 2]>),
-	Bc3(Vec<[u64; 2]>),
+	Bc2(Vec<u128>),
+	Bc3(Vec<u128>),
 	Bc7(Vec<u128>),
 }
 
@@ -588,7 +588,7 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 			let size = f.u32()? as usize;
 			let data = read_maybe_compressed(f, status.compression, size)?;
 			let g = &mut Reader::new(&data);
-			let mut data = a_fast_mode2(g, width, height)?;
+			let data = a_fast_mode2(g, width, height)?;
 			ensure_end(g)?;
 			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
@@ -600,6 +600,12 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 			let mut data = data.array_chunks().copied().map(u32::from_le_bytes).collect::<Vec<_>>();
 			do_swizzle(&mut data, width, height, status.pixel_format);
 			Ok(ImageData::Argb32(data))
+		}
+		BFT::Bc7 => {
+			let data = read_maybe_compressed(f, status.compression, len)?;
+			let mut data = data.array_chunks().copied().map(u128::from_le_bytes).collect::<Vec<_>>();
+			do_swizzle(&mut data, width / 4, height / 4, status.pixel_format);
+			Ok(ImageData::Bc7(data))
 		}
 		_ => {
 			bail!(TODO(format!("{:?}", bft)))

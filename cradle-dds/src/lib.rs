@@ -27,11 +27,39 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
 			data.iter().copied()
 				.flat_map(u32::to_le_bytes)
 				.collect()
-		},
-		cradle::itp::ImageData::Bc1(_) => todo!(),
-		cradle::itp::ImageData::Bc2(_) => todo!(),
-		cradle::itp::ImageData::Bc3(_) => todo!(),
-		cradle::itp::ImageData::Bc7(_) => todo!(),
+		}
+		cradle::itp::ImageData::Bc1(data) => {
+			header.pixel_format.flags |= dds::DDPF::FOURCC;
+			header.pixel_format.four_cc = *b"DXT1";
+			data.iter().copied()
+				.flat_map(u64::to_le_bytes)
+				.collect()
+		}
+		cradle::itp::ImageData::Bc2(data) => {
+			header.pixel_format.flags |= dds::DDPF::FOURCC;
+			header.pixel_format.four_cc = *b"DXT3";
+			data.iter().copied()
+				.flat_map(u128::to_le_bytes)
+				.collect()
+		}
+		cradle::itp::ImageData::Bc3(data) => {
+			header.pixel_format.flags |= dds::DDPF::FOURCC;
+			header.pixel_format.four_cc = *b"DXT5";
+			data.iter().copied()
+				.flat_map(u128::to_le_bytes)
+				.collect()
+		}
+		cradle::itp::ImageData::Bc7(data) => {
+			header.pixel_format.flags |= dds::DDPF::FOURCC;
+			header.pixel_format.four_cc = *b"DX10";
+			header.dx10 = Some(dds::Dx10Header {
+				dxgi_format: dds::DXGI_FORMAT::BC7_UNORM,
+				..dds::Dx10Header::default()
+			});
+			data.iter().copied()
+				.flat_map(u128::to_le_bytes)
+				.collect()
+		}
 	};
 	(header, data)
 }
