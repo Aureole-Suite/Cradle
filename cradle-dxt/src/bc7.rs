@@ -8,7 +8,6 @@ pub fn decode(block: u128) -> [u32; 16] {
 	std::array::from_fn(|i| u32::from_le_bytes(block[i/4][i%4]))
 }
 
-
 #[inline]
 fn decode_block(block: u128) -> [[[u8; 4]; 4]; 4] {
 	match block.trailing_zeros() as usize {
