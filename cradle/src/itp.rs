@@ -596,7 +596,6 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 			let g = &mut Reader::new(&data);
 			let mut data = a_fast_mode2(g, width, height)?;
 			ensure_end(g)?;
-			do_swizzle(&mut data, width, height, status.pixel_format);
 			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
 		BFT::Indexed3 => {
@@ -632,21 +631,53 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 		}
 	}
 
-	let totalcolors = 1 + ncolors.iter().map(|a| *a as usize).sum::<usize>();
-	let mut c = Reader::new(f.slice(totalcolors)?);
+	let totalcolors = ncolors.iter().map(|a| *a as usize).sum::<usize>();
+	let c = &mut Reader::new(f.slice(totalcolors)?);
+	let mode = f.u8()?;
 
 	let mut data = Vec::with_capacity(height*width);
 	for ncolors in ncolors {
 		let mut chunk = [0; 8*16];
 		if ncolors != 0 {
 			let colors = c.slice(ncolors as usize)?;
-			nibbles(f, &mut chunk)?;
-			chunk = chunk.map(|a| colors[a as usize]);
+			match mode {
+				0 => {
+					nibbles(f, &mut chunk)?;
+					chunk = chunk.map(|a| colors[a as usize]);
+				}
+				1 => todo!(),
+				_ => {
+					match f.u8()? {
+						0 => {
+							todo!()
+						}
+						1 => {
+							let mut toggle = false;
+							for j in 0..16 {
+								let mut pos = 0;
+								loop {
+									let m = f.u8()? as usize;
+									if m == 0xFF { break; }
+									if toggle {
+										chunk[pos..pos+m+1].fill(colors[j]);
+										pos += 2;
+									}
+									pos += m;
+									toggle = !toggle;
+								}
+							}
+						}
+						_ => panic!()
+					}
+				}
+			}
 		}
 		data.extend(chunk);
 	}
+	ensure_end(c)?;
 
 	unswizzle_mut(&mut data, height, width, 8, 16);
+
 	Ok(data)
 }
 
