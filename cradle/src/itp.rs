@@ -579,11 +579,9 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 		bail!(PaletteMissing);
 	}
 	match bft {
-		BFT::Indexed1 => {
-			let mut data = read_maybe_compressed(f, status.compression, len)?;
-			do_swizzle(&mut data, width, height, status.pixel_format);
-			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
-		}
+		BFT::Indexed1 => read_idat_simple(f, status, width, height, u8::from_le_bytes, |data| {
+			ImageData::Indexed(palette.unwrap().clone(), data)
+		}),
 		BFT::Indexed2 => {
 			let size = f.u32()? as usize;
 			let data = read_maybe_compressed(f, status.compression, size)?;
@@ -595,22 +593,29 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 		BFT::Indexed3 => {
 			panic!("CCPI is not supported for revision 3")
 		}
-		BFT::Argb32 => {
-			let data = read_maybe_compressed(f, status.compression, len)?;
-			let mut data = data.array_chunks().copied().map(u32::from_le_bytes).collect::<Vec<_>>();
-			do_swizzle(&mut data, width, height, status.pixel_format);
-			Ok(ImageData::Argb32(data))
-		}
-		BFT::Bc7 => {
-			let data = read_maybe_compressed(f, status.compression, len)?;
-			let mut data = data.array_chunks().copied().map(u128::from_le_bytes).collect::<Vec<_>>();
-			do_swizzle(&mut data, width / 4, height / 4, status.pixel_format);
-			Ok(ImageData::Bc7(data))
-		}
+		BFT::Argb32 => read_idat_simple(f, status, width, height, u32::from_le_bytes, ImageData::Argb32),
+		BFT::Bc1 => read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes, ImageData::Bc1),
+		BFT::Bc2 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, ImageData::Bc2),
+		BFT::Bc3 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, ImageData::Bc3),
+		BFT::Bc7 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, ImageData::Bc7),
 		_ => {
 			bail!(TODO(format!("{:?}", bft)))
 		}
 	}
+}
+
+fn read_idat_simple<T, const N: usize>(
+	f: &mut Reader,
+	status: &ItpStatus,
+	width: usize,
+	height: usize,
+	from_le_bytes: fn([u8; N]) -> T,
+	make: impl FnOnce(Vec<T>) -> ImageData,
+) -> Result<ImageData, Error> {
+	let data = read_maybe_compressed(f, status.compression, width * height * N)?;
+	let mut data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
+	do_swizzle(&mut data, width, height, status.pixel_format);
+	Ok(make(data))
 }
 
 fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, Error> {
