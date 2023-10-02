@@ -5,7 +5,7 @@ use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use gospel::read::{Reader, Le as _};
 use falcompress::bzip;
 
-use crate::permute::{unswizzle_mut, unmorton_mut};
+use crate::permute;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -363,14 +363,14 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: Pixe
 	use PixelFormatType as PFT;
 	match pixel_format {
 		PFT::Linear => {},
-		PFT::Pfp_1 => unswizzle_mut(data, height, width, 8, 16),
-		PFT::Pfp_2 => unswizzle_mut(data, height, width, 32, 32),
-		PFT::Pfp_3 => unmorton_mut(data, height, width),
+		PFT::Pfp_1 => permute::unswizzle(data, height, width, 8, 16),
+		PFT::Pfp_2 => permute::unswizzle(data, height, width, 32, 32),
+		PFT::Pfp_3 => permute::unmorton(data, height, width),
 		PFT::Pfp_4 => {
 			for a in data.array_chunks_mut::<64>() {
-				unmorton_mut(a, 8, 8);
+				permute::unmorton(a, 8, 8);
 			}
-			unswizzle_mut(data, height, width, 8, 1)
+			permute::unswizzle(data, height, width, 8, 1)
 		}
 	}
 }
@@ -414,7 +414,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 			let cw = cw.min(w-x);
 			let ch = ch.min(h-y);
 			let mut chunk = read_ccpi_chunk(f, cw * ch)?;
-			unswizzle_mut(&mut chunk, ch, cw, 2, 2);
+			permute::unswizzle(&mut chunk, ch, cw, 2, 2);
 			let mut it = chunk.into_iter();
 			for y in y..y+ch {
 				for x in x..x+cw {
@@ -681,7 +681,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 	}
 	ensure_end(c)?;
 
-	unswizzle_mut(&mut data, height, width, 8, 16);
+	permute::unswizzle(&mut data, height, width, 8, 16);
 
 	Ok(data)
 }

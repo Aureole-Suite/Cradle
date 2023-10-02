@@ -40,7 +40,7 @@ fn test_morton() {
 
 /// # Safety
 /// This function requires that `permutation` is precisely a permutation of the range `0..slice.len()`.
-pub unsafe fn permute_mut<T>(slice: &mut [T], permutation: impl Iterator<Item=usize>) {
+pub unsafe fn permute<T>(slice: &mut [T], permutation: impl Iterator<Item=usize>) {
 	// SAFETY: Since `permutation` is a permutation, `.enumerate()` is too
 	unsafe {
 		apply_permutation(slice, permutation.enumerate())
@@ -50,7 +50,7 @@ pub unsafe fn permute_mut<T>(slice: &mut [T], permutation: impl Iterator<Item=us
 
 /// # Safety
 /// This function requires that `permutation` is precisely a permutation of the range `0..slice.len()`.
-pub unsafe fn unpermute_mut<T>(slice: &mut [T], permutation: impl Iterator<Item=usize>) {
+pub unsafe fn unpermute<T>(slice: &mut [T], permutation: impl Iterator<Item=usize>) {
 	// SAFETY: Since `permutation` is a permutation, `.enumerate()` is too, and so is swapping the pairs
 	unsafe {
 		apply_permutation(slice, permutation.enumerate().map(|(a, b)| (b, a)))
@@ -82,41 +82,41 @@ pub unsafe fn apply_permutation<T>(slice: &mut [T], permutation: impl Iterator<I
 }
 
 #[inline]
-pub fn swizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
+pub fn swizzle<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
 	assert_eq!(slice.len(), w * h);
 	assert_eq!(w % cw, 0);
 	assert_eq!(h % ch, 0);
 	// SAFETY: iter_swizzle is a permutation
 	unsafe {
-		permute_mut(slice, iter_swizzle(h/ch, w/cw, ch, cw));
+		permute(slice, iter_swizzle(h/ch, w/cw, ch, cw));
 	}
 }
 
 #[inline]
-pub fn unswizzle_mut<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
+pub fn unswizzle<T>(slice: &mut [T], h: usize, w: usize, ch: usize, cw: usize) {
 	assert_eq!(slice.len(), w * h);
 	assert_eq!(w % cw, 0);
 	assert_eq!(h % ch, 0);
 	// SAFETY: iter_swizzle is a permutation
 	unsafe {
-		unpermute_mut(slice, iter_swizzle(h/ch, w/cw, ch, cw));
+		unpermute(slice, iter_swizzle(h/ch, w/cw, ch, cw));
 	}
 }
 
 #[inline]
-pub fn morton_mut<T>(slice: &mut [T], height: usize, width: usize) {
+pub fn morton<T>(slice: &mut [T], height: usize, width: usize) {
 	assert_eq!(slice.len(), width * height);
 	// SAFETY: iter_morton is a permutation
 	unsafe {
-		permute_mut(slice, iter_morton(height, width));
+		permute(slice, iter_morton(height, width));
 	}
 }
 
 #[inline]
-pub fn unmorton_mut<T>(slice: &mut [T], height: usize, width: usize) {
+pub fn unmorton<T>(slice: &mut [T], height: usize, width: usize) {
 	assert_eq!(slice.len(), width * height);
 	// SAFETY: iter_morton is a permutation
 	unsafe {
-		unpermute_mut(slice, iter_morton(height, width));
+		unpermute(slice, iter_morton(height, width));
 	}
 }
