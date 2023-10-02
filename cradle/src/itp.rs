@@ -44,6 +44,9 @@ enum ItpError {
 	#[error("unexpected size: expected {expected}, but got {value}")]
 	WrongSize { expected: usize, value: usize },
 
+	#[error("wrong number of mipmaps: header says {expected}, but there are {value}")]
+	WrongMips { expected: usize, value: usize },
+
 	#[error("unexpected data after end")]
 	RemainingData,
 
@@ -477,7 +480,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	let mut n_mip = 0;
 	let mut status = ItpStatus::default();
 	let mut pal = None;
-	let mut data = None;
+	let mut data = Vec::new();
 
 	loop {
 		let fourcc = f.array::<4>()?;
@@ -507,7 +510,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 			b"IMIP" => {
 				f.check_u32(12)?;
 				status.mipmap = f.enum16("IMIP.mipmap")?;
-				n_mip = f.u16()?;
+				n_mip = f.u16()? as usize;
 				f.check_u32(0)?;
 			}
 
@@ -521,8 +524,8 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 			b"IDAT" => {
 				f.check_u32(8)?;
 				f.check_u16(0)?;
-				let mip_nr = f.u16()?;
-				data = Some(read_idat(f, &status, width, height, pal.as_ref())?);
+				f.check_u16(data.len() as u16)?;
+				data.push(read_idat(f, &status, width >> data.len(), height >> data.len(), pal.as_ref())?);
 			}
 
 			b"IEXT" => unimplemented!(),
@@ -539,12 +542,15 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	}
 
 	ensure_size(f.pos() - start, file_size)?;
+	if n_mip + 1 != data.len() {
+		bail!(WrongMips { expected: n_mip + 1, value: data.len() });
+	}
 
 	Ok(Itp {
 		status,
 		width: width as u32,
 		height: height as u32,
-		data: data.unwrap(), // XXX
+		data: data.swap_remove(0), // XXX
 	})
 }
 
