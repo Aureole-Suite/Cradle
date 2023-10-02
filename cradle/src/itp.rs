@@ -573,10 +573,12 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
 		BFT::Indexed2 => {
-			bail!(TODO)
-			// let mut data = a_fast_mode2(f, width, height);
-			// swizzle_mut(&mut data, height/8, width/16, 8, 16);
-			// data
+			let size = f.u32()? as usize;
+			let data = read_maybe_compressed(f, status.compression, size)?;
+			let g = &mut Reader::new(&data);
+			let data = a_fast_mode2(g, width, height)?;
+			ensure_end(g)?;
+			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
 		}
 		BFT::Indexed3 => {
 			panic!("CCPI is not supported for revision 3")
@@ -590,6 +592,42 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, pa
 			bail!(TODO)
 		}
 	}
+}
+
+fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, Error> {
+	fn nibbles(f: &mut Reader, out: &mut [u8]) -> Result<(), Error> {
+		for i in 0..out.len()/2 {
+			let x = f.u8()?;
+			out[2*i] = x >> 4;
+			out[2*i+1] = x & 15;
+		}
+		Ok(())
+	}
+
+	let mut ncolors = vec![0; (height/8)*(width/16)];
+	nibbles(f, &mut ncolors)?;
+	for a in &mut ncolors {
+		if *a != 0 {
+			*a += 1;
+		}
+	}
+
+	let totalcolors = 1 + ncolors.iter().map(|a| *a as usize).sum::<usize>();
+	let mut c = Reader::new(f.slice(totalcolors)?);
+
+	let mut data = Vec::with_capacity(height*width);
+	for ncolors in ncolors {
+		let mut chunk = [0; 8*16];
+		if ncolors != 0 {
+			let colors = c.slice(ncolors as usize)?;
+			nibbles(f, &mut chunk)?;
+			chunk = chunk.map(|a| colors[a as usize]);
+		}
+		data.extend(chunk);
+	}
+
+	swizzle_mut(&mut data, height/8, 8, width/16, 16);
+	Ok(data)
 }
 
 fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> Result<Vec<u8>, Error> {
