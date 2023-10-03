@@ -7,6 +7,3 @@ edition = "2021"
 thiserror = "1.0.0"
 gospel = "0.1.0"
 cradle.path = "../cradle"
-
-[dev-dependencies]
-anyhow = "1.0"

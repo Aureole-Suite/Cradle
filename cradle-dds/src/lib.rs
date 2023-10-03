@@ -69,18 +69,3 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 	dds.slice(&data);
 	dds.finish().unwrap()
 }
-
-#[cfg(test)]
-#[test]
-fn test_dds() -> anyhow::Result<()> {
-	use std::io::Write;
-
-	let path = "../samples/itp/ys_celceta__f_00409.itp";
-	let dat = std::fs::read(path)?;
-	let itp = cradle::itp::read(&dat)?;
-	let dds = to_dds(&itp);
-	let mut f = std::fs::File::create("/tmp/a.dds")?;
-	f.write_all(&dds)?;
-
-	Ok(())
-}
