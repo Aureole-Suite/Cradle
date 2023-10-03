@@ -332,22 +332,17 @@ pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
 
 	// Formats indexed1 and 2 seem to have a check for width == 0 here.
 	// Seems to be something with palette, but no idea what.
-	let width = f.u32()? as usize;
-	let height = f.u32()? as usize;
+	let width = f.u32()?;
+	let height = f.u32()?;
 
 	if let ImageData::Indexed(pal, _) = &mut data {
 		let pal_size = if matches!(head, 1000 | 1002) { 256 } else { f.u32()? as usize };
 		*pal = read_ipal(f, &status, false, pal_size)?;
 	}
 
-	read_idat(f, &status, &mut data, width, height)?;
+	read_idat(f, &status, &mut data, width as usize, height as usize)?;
 
-	Ok(Itp {
-		status,
-		width: width as u32,
-		height: width as u32,
-		data,
-	})
+	Ok(Itp { status, width, height, data })
 }
 
 fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PixelFormatType) {
