@@ -53,6 +53,12 @@ enum ItpError {
 	#[error("ccpi only supports versions 6 and 7, got {0}")]
 	CcpiVersion(u16),
 
+	#[error("missing IHDR chunk")]
+	NoHeader,
+
+	#[error("base and pixel format mismatch: {bft:?} cannot use {pbft:?}")]
+	PixelFormat { bft: BaseFormatType, pbft: PixelBitFormatType },
+
 	#[error("got a palette on a non-indexed format")]
 	PalettePresent,
 
@@ -75,7 +81,7 @@ pub struct Itp {
 	pub data: ImageData,
 }
 
-#[derive(Clone)] // XXX this Debug is no good
+#[derive(Clone)]
 pub enum ImageData {
 	Indexed(Palette, Vec<u8>),
 	Argb16_1(Vec<u16>),
@@ -235,31 +241,6 @@ enum BaseFormatType {
 	Bc7 = 10,
 }
 
-impl BaseFormatType {
-	fn bpp(self) -> usize {
-		match self {
-			BaseFormatType::Indexed1 => 8,
-			BaseFormatType::Indexed2 => 8,
-			BaseFormatType::Indexed3 => 8,
-			BaseFormatType::Argb16 => 16,
-			BaseFormatType::Argb32 => 32,
-			BaseFormatType::Bc1 => 4,
-			BaseFormatType::Bc2 => 8,
-			BaseFormatType::Bc3 => 8,
-			BaseFormatType::BcAuto_1_3 => 0,
-			BaseFormatType::Bc7 => 8,
-		}
-	}
-
-	fn is_indexed(&self) -> bool {
-		matches!(self, Self::Indexed1 | Self::Indexed2 | Self::Indexed3)
-	}
-
-	fn is_bc(&self) -> bool {
-		matches!(self, Self::Bc1 | Self::Bc2 | Self::Bc3 | Self::BcAuto_1_3 | Self::Bc7)
-	}
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
 enum PixelBitFormatType {
@@ -347,19 +328,19 @@ pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
 		return read_ccpi(f, status);
 	}
 
+	let mut data = make_data(&status)?;
+
 	// Formats indexed1 and 2 seem to have a check for width == 0 here.
 	// Seems to be something with palette, but no idea what.
 	let width = f.u32()? as usize;
 	let height = f.u32()? as usize;
 
-	let pal = if status.base_format.is_indexed() {
+	if let ImageData::Indexed(pal, _) = &mut data {
 		let pal_size = if matches!(head, 1000 | 1002) { 256 } else { f.u32()? as usize };
-		Some(read_ipal(f, &status, false, pal_size)?)
-	} else {
-		None
-	};
+		*pal = read_ipal(f, &status, false, pal_size)?;
+	}
 
-	let data = read_idat(f, &status, width, height, pal.as_ref())?;
+	read_idat(f, &status, &mut data, width, height)?;
 
 	Ok(Itp {
 		status,
@@ -485,9 +466,10 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	let mut height = 0;
 	let mut file_size = 0;
 	let mut n_mip = 0;
+	let mut current_mip = 0;
 	let mut status = ItpStatus::default();
 	let mut pal = None;
-	let mut data = Vec::new();
+	let mut data = None;
 
 	loop {
 		let fourcc = f.array::<4>()?;
@@ -506,6 +488,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				status.compression = f.enum16("IHDR.compression")?;
 				status.multi_plane = f.enum16("IHDR.multi_plane")?;
 				f.check_u32(0)?;
+				data = Some(make_data(&status)?)
 			}
 
 			b"IALP" => {
@@ -531,8 +514,12 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 			b"IDAT" => {
 				f.check_u32(8)?;
 				f.check_u16(0)?;
-				f.check_u16(data.len() as u16)?;
-				data.push(read_idat(f, &status, width >> data.len(), height >> data.len(), pal.as_ref())?);
+				f.check_u16(current_mip as u16)?;
+				let Some(data) = &mut data else {
+					bail!(NoHeader)
+				};
+				read_idat(f, &status, data, width >> current_mip, height >> current_mip)?;
+				current_mip += 1;
 			}
 
 			b"IEXT" => unimplemented!(),
@@ -548,16 +535,48 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		}
 	}
 
+	let Some(mut data) = data else {
+		bail!(NoHeader)
+	};
+
+	if let Some(palette) = pal {
+		let ImageData::Indexed(pal, _) = &mut data else {
+			bail!(PalettePresent);
+		};
+		*pal = palette;
+	} else if let ImageData::Indexed(..) = data {
+		bail!(PaletteMissing);
+	}
+
 	ensure_size(f.pos() - start, file_size)?;
-	if n_mip + 1 != data.len() {
-		bail!(WrongMips { expected: n_mip + 1, value: data.len() });
+
+	if n_mip + 1 != current_mip {
+		bail!(WrongMips { expected: n_mip + 1, value: current_mip });
 	}
 
 	Ok(Itp {
 		status,
 		width: width as u32,
 		height: height as u32,
-		data: data.swap_remove(0), // XXX
+		data,
+	})
+}
+
+fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
+	use BaseFormatType as BFT;
+	use PixelBitFormatType as PBFT;
+	Ok(match (status.base_format, status.pixel_bit_format) {
+		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
+			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16_1(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16_2(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16_3(Vec::new()),
+		(BFT::Argb32, PBFT::Argb32) => ImageData::Argb32(Vec::new()),
+		(BFT::Bc1, PBFT::Compressed) => ImageData::Bc1(Vec::new()),
+		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),
+		(BFT::Bc3, PBFT::Compressed) => ImageData::Bc3(Vec::new()),
+		(BFT::Bc7, PBFT::Compressed) => ImageData::Bc7(Vec::new()),
+		(bft, pbft) => bail!(PixelFormat { bft, pbft }),
 	})
 }
 
@@ -582,39 +601,39 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 	}
 }
 
-fn read_idat(f: &mut Reader, status: &ItpStatus, width: usize, height: usize, palette: Option<&Palette>) -> Result<ImageData, Error> {
+fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: usize, height: usize) -> Result<(), Error> {
 	use BaseFormatType as BFT;
 	let bft = status.base_format;
-	if palette.is_some() && !bft.is_indexed() {
-		bail!(PalettePresent);
-	}
-	if palette.is_none() && bft.is_indexed() {
-		bail!(PaletteMissing);
+	macro_rules! dat {
+		($variant:ident) => {
+			if let ImageData::$variant(.., data) = data {
+				data
+			} else {
+				unreachable!()
+			}
+		}
 	}
 	match bft {
-		BFT::Indexed1 => read_idat_simple(f, status, width, height, u8::from_le_bytes, |data| {
-			ImageData::Indexed(palette.unwrap().clone(), data)
-		}),
+		BFT::Indexed1 => read_idat_simple(f, status, width, height, u8::from_le_bytes, dat!(Indexed))?,
 		BFT::Indexed2 => {
+			let imgdata = dat!(Indexed);
 			let size = f.u32()? as usize;
 			let data = read_maybe_compressed(f, status.compression, size)?;
 			let g = &mut Reader::new(&data);
 			let data = a_fast_mode2(g, width, height)?;
 			ensure_end(g)?;
-			Ok(ImageData::Indexed(palette.unwrap().clone(), data))
+			imgdata.extend(data);
 		}
-		BFT::Indexed3 => {
-			panic!("CCPI is not supported for revision 3")
-		}
-		BFT::Argb32 => read_idat_simple(f, status, width, height, u32::from_le_bytes, ImageData::Argb32),
-		BFT::Bc1 => read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes, ImageData::Bc1),
-		BFT::Bc2 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, ImageData::Bc2),
-		BFT::Bc3 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, ImageData::Bc3),
-		BFT::Bc7 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, ImageData::Bc7),
-		_ => {
-			bail!(TODO(format!("{:?}", bft)))
-		}
+		BFT::Indexed3 => bail!(TODO("CCPI is not supported for revision 3".to_owned())),
+		BFT::Argb16 => bail!(TODO("Argb16".to_owned())),
+		BFT::Argb32 => read_idat_simple(f, status, width, height, u32::from_le_bytes, dat!(Argb32))?,
+		BFT::Bc1 => read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes, dat!(Bc1))?,
+		BFT::Bc2 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc2))?,
+		BFT::Bc3 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc3))?,
+		BFT::BcAuto_1_3 => bail!(TODO("BcAuto_1_3 is not supported".to_owned())),
+		BFT::Bc7 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc7))?,
 	}
+	Ok(())
 }
 
 fn read_idat_simple<T, const N: usize>(
@@ -623,12 +642,13 @@ fn read_idat_simple<T, const N: usize>(
 	width: usize,
 	height: usize,
 	from_le_bytes: fn([u8; N]) -> T,
-	make: impl FnOnce(Vec<T>) -> ImageData,
-) -> Result<ImageData, Error> {
+	out: &mut Vec<T>,
+) -> Result<(), Error> {
 	let data = read_maybe_compressed(f, status.compression, width * height * N)?;
 	let mut data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
 	do_swizzle(&mut data, width, height, status.pixel_format);
-	Ok(make(data))
+	out.extend(data);
+	Ok(())
 }
 
 fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, Error> {
