@@ -86,7 +86,7 @@ impl Default for Dds {
 			width: 0,
 			pitch: 0,
 			depth: 0,
-			mip_map_count: 0,
+			mip_map_count: 1,
 			reserved: Default::default(),
 			pixel_format: PixelFormat::default(),
 			caps: DDSCAPS::TEXTURE,

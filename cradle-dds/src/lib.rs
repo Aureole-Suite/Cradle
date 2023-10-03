@@ -12,6 +12,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 			};
 			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
 			header.pixel_format.rgb_bit_count = 8;
+			set_mipmap(&mut header, data.len(), width * height);
 			let mut pal2 = [0; 256];
 			pal2[..pal.len()].copy_from_slice(pal);
 			pal2.iter()
@@ -23,6 +24,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 		ImageData::Argb16_2(_) => todo!(),
 		ImageData::Argb16_3(_) => todo!(),
 		ImageData::Argb32(data) => {
+			set_mipmap(&mut header, data.len(), width * height);
 			data.iter().copied()
 				.flat_map(u32::to_le_bytes)
 				.collect()
@@ -30,6 +32,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 		ImageData::Bc1(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT1";
+			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
 			data.iter().copied()
 				.flat_map(u64::to_le_bytes)
 				.collect()
@@ -37,6 +40,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 		ImageData::Bc2(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT3";
+			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
@@ -44,6 +48,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 		ImageData::Bc3(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT5";
+			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
@@ -55,6 +60,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 				dxgi_format: dds::DXGI_FORMAT::BC7_UNORM,
 				..dds::Dx10Header::default()
 			});
+			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
@@ -65,4 +71,18 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 	header.write(&mut dds);
 	dds.slice(&data);
 	dds.finish().unwrap()
+}
+
+fn set_mipmap(header: &mut dds::Dds, mut len: usize, imgsize: u32) {
+	let mut imgsize = imgsize as usize;
+	let mut nmip = 0;
+	while imgsize >= len {
+		len -= imgsize;
+		imgsize /= 4;
+		nmip += 1;
+	}
+	if nmip != 1 {
+		header.flags |= dds::DDSD::MIPMAPCOUNT;
+		header.mip_map_count = nmip;
+	}
 }
