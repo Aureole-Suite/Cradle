@@ -14,6 +14,8 @@ pub fn iter_swizzle(a: usize, b: usize, c: usize, d: usize) -> impl Iterator<Ite
 
 #[inline(always)]
 pub fn iter_morton(h: usize, w: usize) -> impl Iterator<Item=usize> {
+	assert!(w.is_power_of_two());
+	assert!(h.is_power_of_two());
 	(0..w*h).map(move |a| {
 		let mut x = 0;
 		let mut y = 0;
@@ -21,18 +23,23 @@ pub fn iter_morton(h: usize, w: usize) -> impl Iterator<Item=usize> {
 			x |= usize::from(a & (2<<(2*b)) != 0) << b;
 			y |= usize::from(a & (1<<(2*b)) != 0) << b;
 		}
-		(y%h)*w+(y/h)*h+x
+		while x >= w { y += h/w; x -= w; }
+		while y >= h { x += w/h; y -= h; }
+		y*w + x
 	})
 }
 
 #[test]
-fn test_morton() {
-	let mut mort = iter_morton(256, 512).collect::<Vec<_>>();
+fn test_morton_wide() {
+	let mut mort = iter_morton(2, 8).collect::<Vec<_>>();
 	mort.sort();
 	let sort = (0..mort.len()).collect::<Vec<_>>();
 	assert_eq!(mort, sort);
+}
 
-	let mut mort = iter_morton(512, 256).collect::<Vec<_>>();
+#[test]
+fn test_morton_tall() {
+	let mut mort = iter_morton(8, 2).collect::<Vec<_>>();
 	mort.sort();
 	let sort = (0..mort.len()).collect::<Vec<_>>();
 	assert_eq!(mort, sort);
