@@ -5,7 +5,10 @@
 #[inline]
 pub fn decode(block: u128) -> [u32; 16] {
 	let block = decode_block(block);
-	std::array::from_fn(|i| u32::from_le_bytes(block[i/4][i%4]))
+	std::array::from_fn(|i| {
+		let [r, g, b, a] = block[i/4][i%4];
+		u32::from_le_bytes([b, g, r, a])
+	})
 }
 
 #[inline]
