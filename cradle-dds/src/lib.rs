@@ -1,13 +1,15 @@
+use cradle::itp::{Itp, ImageData};
+
 pub mod dds;
 
-pub fn to_dds(itp: &cradle::itp::Itp) -> Vec<u8> {
+pub fn to_dds(itp: &Itp) -> Vec<u8> {
 	let mut header = dds::Dds {
 		height: itp.height,
 		width: itp.width,
 		..dds::Dds::default()
 	};
 	let data: Vec<u8> = match &itp.data {
-		cradle::itp::ImageData::Indexed(pal, data) => {
+		ImageData::Indexed(pal, data) => {
 			let cradle::itp::Palette::Embedded(pal) = pal else {
 				panic!("external palette not supported");
 			};
@@ -20,36 +22,36 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> Vec<u8> {
 				.chain(data.iter().copied())
 				.collect()
 		}
-		cradle::itp::ImageData::Argb16_1(_) => todo!(),
-		cradle::itp::ImageData::Argb16_2(_) => todo!(),
-		cradle::itp::ImageData::Argb16_3(_) => todo!(),
-		cradle::itp::ImageData::Argb32(data) => {
+		ImageData::Argb16_1(_) => todo!(),
+		ImageData::Argb16_2(_) => todo!(),
+		ImageData::Argb16_3(_) => todo!(),
+		ImageData::Argb32(data) => {
 			data.iter().copied()
 				.flat_map(u32::to_le_bytes)
 				.collect()
 		}
-		cradle::itp::ImageData::Bc1(data) => {
+		ImageData::Bc1(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT1";
 			data.iter().copied()
 				.flat_map(u64::to_le_bytes)
 				.collect()
 		}
-		cradle::itp::ImageData::Bc2(data) => {
+		ImageData::Bc2(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT3";
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
 		}
-		cradle::itp::ImageData::Bc3(data) => {
+		ImageData::Bc3(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT5";
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
 		}
-		cradle::itp::ImageData::Bc7(data) => {
+		ImageData::Bc7(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DX10";
 			header.dx10 = Some(dds::Dx10Header {
