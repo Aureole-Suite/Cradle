@@ -295,7 +295,7 @@ enum MipmapType {
 pub fn read(f: &[u8]) -> Result<Itp, Error> {
 	let f = &mut Reader::new(f);
 	let itp = read_from(f)?;
-	ensure_end(f)?;
+	// ensure_end(f)?; // Doesn't work on Geofront's bullshit trailing byte
 	Ok(itp)
 }
 
