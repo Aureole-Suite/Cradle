@@ -6,15 +6,15 @@ pub fn bc1(block: u64) -> [u32; 16] {
 	let colors = if c0 > c1 {
 		[
 			lerp(c0, c1, 0, 3),
+			lerp(c0, c1, 3, 3),
 			lerp(c0, c1, 1, 3),
 			lerp(c0, c1, 2, 3),
-			lerp(c0, c1, 3, 3),
 		]
 	} else {
 		[
 			lerp(c0, c1, 0, 2),
-			lerp(c0, c1, 1, 2),
 			lerp(c0, c1, 2, 2),
+			lerp(c0, c1, 1, 2),
 			0x00000000,
 		]
 	};
