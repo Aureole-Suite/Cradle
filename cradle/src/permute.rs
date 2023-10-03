@@ -16,22 +16,27 @@ pub fn iter_swizzle(a: usize, b: usize, c: usize, d: usize) -> impl Iterator<Ite
 pub fn iter_morton(h: usize, w: usize) -> impl Iterator<Item=usize> {
 	assert!(w.is_power_of_two());
 	assert!(h.is_power_of_two());
-	(0..w*h).map(move |a| {
-		let mut x = 0;
+	let bits = w.trailing_zeros().max(h.trailing_zeros());
+	(0..w*h).map(move |mut a| {
 		let mut y = 0;
-		for b in (0..usize::BITS/2).rev() {
-			x |= usize::from(a & (2<<(2*b)) != 0) << b;
-			y |= usize::from(a & (1<<(2*b)) != 0) << b;
+		let mut x = 0;
+		for b in 0..bits {
+			if b < h.trailing_zeros() {
+				y |= (a & 1) << b;
+				a >>= 1;
+			}
+			if b < w.trailing_zeros() {
+				x |= (a & 1) << b;
+				a >>= 1;
+			}
 		}
-		while x >= w { y += h/w; x -= w; }
-		while y >= h { x += w/h; y -= h; }
 		y*w + x
 	})
 }
 
 #[test]
 fn test_morton_wide() {
-	let mut mort = iter_morton(2, 8).collect::<Vec<_>>();
+	let mut mort = iter_morton(4, 16).collect::<Vec<_>>();
 	mort.sort();
 	let sort = (0..mort.len()).collect::<Vec<_>>();
 	assert_eq!(mort, sort);
@@ -39,7 +44,7 @@ fn test_morton_wide() {
 
 #[test]
 fn test_morton_tall() {
-	let mut mort = iter_morton(8, 2).collect::<Vec<_>>();
+	let mut mort = iter_morton(16, 4).collect::<Vec<_>>();
 	mort.sort();
 	let sort = (0..mort.len()).collect::<Vec<_>>();
 	assert_eq!(mort, sort);
