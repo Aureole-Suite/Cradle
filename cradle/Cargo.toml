@@ -11,13 +11,12 @@ gospel = "0.1.0"
 
 falcompress.path = "../../Falcompress"
 
-[library]
-doctest = false
-
 [dev-dependencies]
 filetest = "0.1.1"
 gospel = { version = "0.1.0", features = ["dump"] }
 anyhow = "1.0"
-memmap2 = "0.8"
+memmap2 = "0.9"
+rayon = "1.8"
+indicatif = { version = "0.17", features = ["rayon"] }
 
 png = "0.17"
