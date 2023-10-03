@@ -3,5 +3,6 @@ members = [
 	"cradle",
 	"cradle-dds",
 	"cradle-dxt",
+	"cradle-cli",
 ]
 resolver = "2"
