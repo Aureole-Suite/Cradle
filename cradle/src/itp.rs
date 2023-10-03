@@ -311,7 +311,14 @@ enum MipmapType {
 	Mipmap_2 = 2,
 }
 
-pub fn read(f: &mut Reader) -> Result<Itp, Error> {
+pub fn read(f: &[u8]) -> Result<Itp, Error> {
+	let f = &mut Reader::new(f);
+	let itp = read_from(f)?;
+	ensure_end(f)?;
+	Ok(itp)
+}
+
+pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
 	const ITP: u32 = u32::from_le_bytes(*b"ITP\xFF");
 	const PNG: u32 = u32::from_le_bytes(*b"\x89PNG");
 	const DDS: u32 = u32::from_le_bytes(*b"DDS ");
@@ -821,7 +828,7 @@ pub impl Reader<'_> {
 #[cfg(test)]
 #[filetest::filetest("../../samples/itp/*")]
 fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
-	read(&mut Reader::new(bytes))?;
+	read(bytes)?;
 	Ok(())
 }
 
@@ -831,7 +838,7 @@ fn test_png() -> anyhow::Result<()> {
 	let path = "../samples/itp/ys_celceta__f_00409.itp";
 	let file = std::fs::File::open(path)?;
 	let dat = unsafe { memmap2::Mmap::map(&file)? };
-	let itp = read(&mut Reader::new(&dat))?;
+	let itp = read(&dat)?;
 	let Itp { status: _, width, height, data } = itp;
 	let ImageData::Argb32(data) = data else { panic!() };
 	write_png(std::fs::File::create("/tmp/a.png")?, width, height, &data)?;

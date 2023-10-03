@@ -1,12 +1,12 @@
 pub mod dds;
 
-pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
+pub fn to_dds(itp: &cradle::itp::Itp) -> Vec<u8> {
 	let mut header = dds::Dds {
 		height: itp.height,
 		width: itp.width,
 		..dds::Dds::default()
 	};
-	let data = match &itp.data {
+	let data: Vec<u8> = match &itp.data {
 		cradle::itp::ImageData::Indexed(pal, data) => {
 			let cradle::itp::Palette::Embedded(pal) = pal else {
 				panic!("external palette not supported");
@@ -61,7 +61,11 @@ pub fn to_dds(itp: &cradle::itp::Itp) -> (dds::Dds, Vec<u8>) {
 				.collect()
 		}
 	};
-	(header, data)
+
+	let mut dds = gospel::write::Writer::new();
+	header.write(&mut dds);
+	dds.slice(&data);
+	dds.finish().unwrap()
 }
 
 #[cfg(test)]
@@ -71,13 +75,10 @@ fn test_dds() -> anyhow::Result<()> {
 
 	let path = "../samples/itp/ys_celceta__f_00409.itp";
 	let dat = std::fs::read(path)?;
-	let itp = cradle::itp::read(&mut gospel::read::Reader::new(&dat))?;
-	let (dds, data) = to_dds(&itp);
-	let mut w = gospel::write::Writer::new();
-	dds.write(&mut w);
+	let itp = cradle::itp::read(&dat)?;
+	let dds = to_dds(&itp);
 	let mut f = std::fs::File::create("/tmp/a.dds")?;
-	f.write_all(&w.finish().unwrap())?;
-	f.write_all(&data)?;
+	f.write_all(&dds)?;
 
 	Ok(())
 }
