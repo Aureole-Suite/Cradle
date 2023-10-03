@@ -1,16 +1,13 @@
-use cradle::itp::{Itp, ImageData};
+use cradle::itp::{Itp, ImageData, Palette};
 
 pub mod dds;
 
 pub fn to_dds(itp: &Itp) -> Vec<u8> {
-	let mut header = dds::Dds {
-		height: itp.height,
-		width: itp.width,
-		..dds::Dds::default()
-	};
-	let data: Vec<u8> = match &itp.data {
+	let Itp { status: _, width, height, ref data } = *itp;
+	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
+	let data: Vec<u8> = match &data {
 		ImageData::Indexed(pal, data) => {
-			let cradle::itp::Palette::Embedded(pal) = pal else {
+			let Palette::Embedded(pal) = pal else {
 				panic!("external palette not supported");
 			};
 			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
