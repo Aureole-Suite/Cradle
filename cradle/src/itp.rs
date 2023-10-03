@@ -15,6 +15,9 @@ pub enum Error {
 	#[error("{source}")]
 	Bzip { #[from] source: bzip::Error, backtrace: std::backtrace::Backtrace },
 
+	#[error("this is not an itp file")]
+	NotItp,
+
 	#[error("{source}")]
 	Itp {
 		#[allow(private_interfaces)]
@@ -26,9 +29,6 @@ pub enum Error {
 
 #[derive(Debug, thiserror::Error)]
 enum ItpError {
-	#[error("not an itp file")]
-	NotItp,
-
 	#[error("gen2 flags missing for {0}")]
 	MissingFlag(&'static str),
 
@@ -306,7 +306,7 @@ pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
 
 	let head = f.u32()?;
 	let flags = match head {
-		PNG | DDS => bail!(NotItp),
+		PNG | DDS => return Err(Error::NotItp),
 		ITP => {
 			f.seek(f.pos() - 4)?;
 			return read_revision_3(f);
@@ -320,7 +320,7 @@ pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
 		1005 => 0x210401, // Indexed2, Bz_1, Pfp_1
 		1006 => 0x400401, // Indexed3, Ccpi, Pfp_1
 		x if x & 0x40000000 != 0 => x,
-		_ => bail!(NotItp),
+		_ => return Err(Error::NotItp),
 	};
 	let status = ItpStatus::from_flags(flags)?;
 

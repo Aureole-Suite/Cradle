@@ -104,7 +104,6 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 
 fn itp_to_png(cli: &Cli, f: impl Write, itp: &Itp) -> eyre::Result<()> {
 	let Itp { status: _, width, height, ref data } = *itp;
-	tracing::info!("{:?}", data);
 	match data {
 		ImageData::Indexed(pal, data) => {
 			let pal = match pal {
