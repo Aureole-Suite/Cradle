@@ -76,7 +76,7 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 fn set_mipmap(header: &mut dds::Dds, mut len: usize, imgsize: u32) {
 	let mut imgsize = imgsize as usize;
 	let mut nmip = 0;
-	while imgsize >= len {
+	while len >= imgsize && imgsize > 0 {
 		len -= imgsize;
 		imgsize /= 4;
 		nmip += 1;
