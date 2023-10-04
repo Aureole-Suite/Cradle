@@ -13,7 +13,7 @@ pub enum Error {
 	Read { #[from] source: gospel::read::Error, backtrace: std::backtrace::Backtrace },
 
 	#[error("{source}")]
-	Bzip { #[from] source: bzip::Error, backtrace: std::backtrace::Backtrace },
+	Compression { #[from] source: falcompress::Error, backtrace: std::backtrace::Backtrace },
 
 	#[error("this is not an itp file")]
 	NotItp,
@@ -766,12 +766,12 @@ fn decompress_c77(f: &mut Reader, out: &mut Vec<u8>) -> Result<(), Error> {
 	let data = f.slice(csize)?;
 
 	let start = out.len();
-	let mut f = Reader::new(data);
+	let f = &mut Reader::new(data);
 	let mode = f.u32()?;
 	if mode == 0 {
 		out.extend_from_slice(&data[4..]);
 	} else {
-		decompress_c77_inner(f, mode, out)?;
+		decompress_c77_inner(f, mode, &mut falcompress::util::OutBuf::new(out))?;
 	}
 
 	let written = out.len() - start;
@@ -779,27 +779,20 @@ fn decompress_c77(f: &mut Reader, out: &mut Vec<u8>) -> Result<(), Error> {
 	Ok(())
 }
 
-fn decompress_c77_inner(mut f: Reader<'_>, mode: u32, out: &mut Vec<u8>) -> Result<(), Error> {
-	let start = out.len();
+fn decompress_c77_inner(f: &mut Reader, mode: u32, out: &mut impl falcompress::util::Output) -> Result<(), Error> {
 	while !f.is_empty() {
 		let x = f.u16()? as usize;
-		let op = x & !(!0 << mode);
-		let num = x >> mode;
-		if op == 0 {
-			out.extend(f.slice(num)?);
+		let x1 = x & !(!0 << mode);
+		let x2 = x >> mode;
+		if x1 == 0 {
+			out.verbatim(f.slice(x2)?);
 		} else {
-			if num > out.len() - start {
-				return Err(bzip::Error::BadRepeat { count: op, offset: num + 1, len: out.len() }.into())
-			};
-			for _ in 0..op {
-				out.push(out[out.len() - num - 1])
-			}
-			out.push(f.u8()?);
+			out.repeat(x1, x2 + 1)?;
+			out.verbatim(&[f.u8()?]);
 		}
 	}
 	Ok(())
 }
-
 
 fn show_fourcc(fourcc: [u8; 4]) -> String {
 	fourcc.iter()
