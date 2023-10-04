@@ -4,6 +4,7 @@ use clap::ValueHint;
 use eyre_span::emit;
 
 mod itp_png;
+mod itp_dds;
 
 #[derive(Debug, Clone, Parser)]
 #[command(arg_required_else_help = true)]
@@ -87,7 +88,7 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			if cli.dds {
 				let output = cli.output(file, "dds")?;
 				let f = std::fs::File::create(&output)?;
-				cradle_dds::to_dds(f, &itp)?;
+				itp_dds::itp_to_dds(cli, f, &itp)?;
 				tracing::info!("wrote to {output}");
 			} else {
 				let output = cli.output(file, "png")?;
