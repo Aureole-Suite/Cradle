@@ -145,8 +145,7 @@ enum BaseFormatType {
 	Bc1 = 6,
 	Bc2 = 7,
 	Bc3 = 8,
-	#[deprecated]
-	BcAuto_1_3 = 9,
+	// BcAuto_1_3 = 9,
 	Bc7 = 10,
 }
 
@@ -157,8 +156,7 @@ enum PixelBitFormatType {
 	Argb16_1 = 1,
 	Argb16_2 = 2,
 	Argb16_3 = 3,
-	#[deprecated]
-	Argb16_auto = 4,
+	// Argb16_auto = 4,
 	#[default]
 	Argb32 = 5,
 	Compressed = 6,
