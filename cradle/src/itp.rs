@@ -3,7 +3,6 @@
 use std::ffi::CString;
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use gospel::read::{Reader, Le as _};
-use falcompress::bzip;
 
 use crate::permute;
 
@@ -718,7 +717,7 @@ fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> R
 	use CompressionType as CT;
 	let data = match comp {
 		CT::None => f.slice(len)?.to_vec(),
-		CT::Bz_1 | CT::C77 => freadp(f, Some(len))?,
+		CT::Bz_1 | CT::C77 => freadp(f)?,
 		CT::Bz_2 => freadp_multi(f, len)?,
 	};
 	ensure_size(data.len(), len)?;
@@ -728,71 +727,12 @@ fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> R
 fn freadp_multi(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 	let mut out = Vec::new();
 	while out.len() < len {
-		out.extend(freadp(f, None)?)
+		out.extend(freadp(f)?)
 	}
 	Ok(out)
 }
 
-fn freadp(f: &mut Reader, expected_len: Option<usize>) -> Result<Vec<u8>, Error> {
-	if f.check_u32(0x80000001).is_ok() {
-		let n_chunks = f.u32()? as usize;
-		let total_csize = f.u32()? as usize;
-		let buf_size = f.u32()? as usize;
-		let total_usize = f.u32()? as usize;
-		if let Some(len) = expected_len {
-			ensure_size(total_usize, len)?;
-		}
-		let f = &mut Reader::new(f.slice(total_csize)?);
-
-		let mut data = Vec::new();
-		let mut max_csize = 0;
-		for _ in 0..n_chunks {
-			let start = f.pos();
-			decompress_c77(f, &mut data)?;
-			max_csize = max_csize.max(f.pos() - start);
-		}
-		ensure_size(max_csize, buf_size)?;
-		ensure_size(data.len(), total_usize)?;
-		ensure_end(f)?;
-		Ok(data)
-	} else {
-		Ok(bzip::decompress_ed7(f)?)
-	}
-}
-
-fn decompress_c77(f: &mut Reader, out: &mut Vec<u8>) -> Result<(), Error> {
-	let csize = f.u32()? as usize;
-	let usize = f.u32()? as usize;
-	let data = f.slice(csize)?;
-
-	let start = out.len();
-	let f = &mut Reader::new(data);
-	let mode = f.u32()?;
-	if mode == 0 {
-		out.extend_from_slice(&data[4..]);
-	} else {
-		decompress_c77_inner(f, mode, &mut falcompress::util::OutBuf::new(out))?;
-	}
-
-	let written = out.len() - start;
-	ensure_size(written, usize)?;
-	Ok(())
-}
-
-fn decompress_c77_inner(f: &mut Reader, mode: u32, out: &mut impl falcompress::util::Output) -> Result<(), Error> {
-	while !f.is_empty() {
-		let x = f.u16()? as usize;
-		let x1 = x & !(!0 << mode);
-		let x2 = x >> mode;
-		if x1 == 0 {
-			out.verbatim(f.slice(x2)?);
-		} else {
-			out.repeat(x1, x2 + 1)?;
-			out.verbatim(&[f.u8()?]);
-		}
-	}
-	Ok(())
-}
+use falcompress::freadp::freadp;
 
 fn show_fourcc(fourcc: [u8; 4]) -> String {
 	fourcc.iter()
