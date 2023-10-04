@@ -11,8 +11,9 @@ pub fn itp_to_dds(cli: &Cli, mut write: impl Write, itp: &Itp) -> eyre::Result<(
 	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
 	let data: Vec<u8> = match &data {
 		ImageData::Indexed(pal, data) => {
-			let Palette::Embedded(pal) = pal else {
-				panic!("external palette not supported");
+			let pal = match pal {
+				Palette::Embedded(pal) => pal,
+				Palette::External(_) => eyre::bail!("external palette is not currently supported"),
 			};
 			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
 			header.pixel_format.rgb_bit_count = 8;
@@ -24,9 +25,9 @@ pub fn itp_to_dds(cli: &Cli, mut write: impl Write, itp: &Itp) -> eyre::Result<(
 				.chain(data.iter().copied())
 				.collect()
 		}
-		ImageData::Argb16_1(_) => todo!(),
-		ImageData::Argb16_2(_) => todo!(),
-		ImageData::Argb16_3(_) => todo!(),
+		ImageData::Argb16_1(_) => eyre::bail!("16-bit color is not currently supported"),
+		ImageData::Argb16_2(_) => eyre::bail!("16-bit color is not currently supported"),
+		ImageData::Argb16_3(_) => eyre::bail!("16-bit color is not currently supported"),
 		ImageData::Argb32(data) => {
 			set_mipmap(&mut header, data.len(), width * height);
 			data.iter().copied()
