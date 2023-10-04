@@ -3,7 +3,7 @@ use clap::Parser;
 use clap::ValueHint;
 use eyre_span::emit;
 
-mod itp;
+mod itp_png;
 
 #[derive(Debug, Clone, Parser)]
 #[command(arg_required_else_help = true)]
@@ -92,7 +92,7 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			} else {
 				let output = cli.output(file, "png")?;
 				let f = std::fs::File::create(&output)?;
-				itp::itp_to_png(cli, f, &itp)?;
+				itp_png::itp_to_png(cli, f, &itp)?;
 				tracing::info!("wrote to {output}");
 			}
 		}
