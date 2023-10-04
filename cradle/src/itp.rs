@@ -65,7 +65,7 @@ enum ItpError {
 	PaletteMissing,
 
 	#[error("TODO: {0}")]
-	TODO(String)
+	Todo(String)
 }
 
 #[derive(Debug, Clone)]

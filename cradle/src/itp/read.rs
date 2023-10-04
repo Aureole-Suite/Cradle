@@ -370,7 +370,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 
 fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
 	if is_external {
-		bail!(TODO(String::from("External IPAL")));
+		bail!(Todo(String::from("External IPAL")));
 	} else {
 		let data = read_maybe_compressed(f, status.compression, size * 4)?;
 
@@ -411,13 +411,13 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: us
 			ensure_end(g)?;
 			imgdata.extend(data);
 		}
-		BFT::Indexed3 => bail!(TODO("CCPI is not supported for revision 3".to_owned())),
-		BFT::Argb16 => bail!(TODO("Argb16".to_owned())),
+		BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
+		BFT::Argb16 => bail!(Todo("Argb16".to_owned())),
 		BFT::Argb32 => read_idat_simple(f, status, width, height, u32::from_le_bytes, dat!(Argb32))?,
 		BFT::Bc1 => read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes, dat!(Bc1))?,
 		BFT::Bc2 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc2))?,
 		BFT::Bc3 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc3))?,
-		BFT::BcAuto_1_3 => bail!(TODO("BcAuto_1_3 is not supported".to_owned())),
+		BFT::BcAuto_1_3 => bail!(Todo("BcAuto_1_3 is not supported".to_owned())),
 		BFT::Bc7 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc7))?,
 	}
 	Ok(())
