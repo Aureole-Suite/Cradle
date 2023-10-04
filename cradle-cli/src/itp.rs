@@ -1,30 +1,10 @@
 use std::io::Write;
 
-use camino::Utf8Path;
 use cradle::itp::{Itp, ImageData, Palette};
 
 use crate::Cli;
 
-pub fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
-	let data = std::fs::read(file)?;
-	let itp = tracing::info_span!("parse_itp").in_scope(|| {
-		cradle::itp::read(&data).map_err(eyre::Report::from)
-	})?;
-	if cli.dds {
-		let output = cli.output(file, "dds")?;
-		let f = std::fs::File::create(&output)?;
-		cradle_dds::to_dds(f, &itp)?;
-		tracing::info!("wrote to {output}");
-	} else {
-		let output = cli.output(file, "png")?;
-		let f = std::fs::File::create(&output)?;
-		itp_to_png(cli, f, &itp)?;
-		tracing::info!("wrote to {output}");
-	}
-	Ok(())
-}
-
-fn itp_to_png(cli: &Cli, f: impl Write, itp: &Itp) -> eyre::Result<()> {
+pub fn itp_to_png(cli: &Cli, f: impl Write, itp: &Itp) -> eyre::Result<()> {
 	let Itp { status: _, width, height, ref data } = *itp;
 	match data {
 		ImageData::Indexed(pal, data) => {

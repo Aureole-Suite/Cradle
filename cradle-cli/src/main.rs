@@ -79,7 +79,23 @@ fn init_tracing() -> Result<(), eyre::Error> {
 fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	let ext = file.extension().unwrap_or("");
 	match ext {
-		"itp" => itp::process(cli, file)?,
+		"itp" => {
+			let data = std::fs::read(file)?;
+			let itp = tracing::info_span!("parse_itp").in_scope(|| {
+				cradle::itp::read(&data).map_err(eyre::Report::from)
+			})?;
+			if cli.dds {
+				let output = cli.output(file, "dds")?;
+				let f = std::fs::File::create(&output)?;
+				cradle_dds::to_dds(f, &itp)?;
+				tracing::info!("wrote to {output}");
+			} else {
+				let output = cli.output(file, "png")?;
+				let f = std::fs::File::create(&output)?;
+				itp::itp_to_png(cli, f, &itp)?;
+				tracing::info!("wrote to {output}");
+			}
+		}
 		_ => eyre::bail!("unknown file extension"),
 	}
 	Ok(())
