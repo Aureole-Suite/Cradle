@@ -344,7 +344,7 @@ pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
 	Ok(Itp { status, width, height, data })
 }
 
-fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PixelFormatType) {
+fn do_unswizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PixelFormatType) {
 	use PixelFormatType as PFT;
 	match pixel_format {
 		PFT::Linear => {},
@@ -358,6 +358,24 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: Pixe
 			permute::unswizzle(data, height, width, 8, 1)
 		}
 	}
+}
+
+fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
+	use BaseFormatType as BFT;
+	use PixelBitFormatType as PBFT;
+	Ok(match (status.base_format, status.pixel_bit_format) {
+		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
+			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16_1(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16_2(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16_3(Vec::new()),
+		(BFT::Argb32, PBFT::Argb32) => ImageData::Argb32(Vec::new()),
+		(BFT::Bc1, PBFT::Compressed) => ImageData::Bc1(Vec::new()),
+		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),
+		(BFT::Bc3, PBFT::Compressed) => ImageData::Bc3(Vec::new()),
+		(BFT::Bc7, PBFT::Compressed) => ImageData::Bc7(Vec::new()),
+		(bft, pbft) => bail!(PixelFormat { bft, pbft }),
+	})
 }
 
 fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
@@ -556,24 +574,6 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	})
 }
 
-fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
-	use BaseFormatType as BFT;
-	use PixelBitFormatType as PBFT;
-	Ok(match (status.base_format, status.pixel_bit_format) {
-		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
-			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16_1(Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16_2(Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16_3(Vec::new()),
-		(BFT::Argb32, PBFT::Argb32) => ImageData::Argb32(Vec::new()),
-		(BFT::Bc1, PBFT::Compressed) => ImageData::Bc1(Vec::new()),
-		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),
-		(BFT::Bc3, PBFT::Compressed) => ImageData::Bc3(Vec::new()),
-		(BFT::Bc7, PBFT::Compressed) => ImageData::Bc7(Vec::new()),
-		(bft, pbft) => bail!(PixelFormat { bft, pbft }),
-	})
-}
-
 fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
 	if is_external {
 		bail!(TODO(String::from("External IPAL")));
@@ -640,7 +640,7 @@ fn read_idat_simple<T, const N: usize>(
 ) -> Result<(), Error> {
 	let data = read_maybe_compressed(f, status.compression, width * height * N)?;
 	let mut data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
-	do_swizzle(&mut data, width, height, status.pixel_format);
+	do_unswizzle(&mut data, width, height, status.pixel_format);
 	out.extend(data);
 	Ok(())
 }
@@ -715,10 +715,12 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 
 fn read_maybe_compressed(f: &mut Reader, comp: CompressionType, len: usize) -> Result<Vec<u8>, Error> {
 	use CompressionType as CT;
+	// Reader seems to make no difference between Bz_1 and C77. Guess writer does though?
 	let data = match comp {
 		CT::None => f.slice(len)?.to_vec(),
-		CT::Bz_1 | CT::C77 => freadp(f)?,
+		CT::Bz_1 => freadp(f)?,
 		CT::Bz_2 => freadp_multi(f, len)?,
+		CT::C77 => freadp(f)?,
 	};
 	ensure_size(data.len(), len)?;
 	Ok(data)
