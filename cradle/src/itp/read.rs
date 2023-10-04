@@ -328,7 +328,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				current_mip += 1;
 			}
 
-			b"IEXT" => unimplemented!(),
+			b"IEXT" => bail!(Todo("IEXT chunk".into())),
 
 			b"IHAS" => {
 				f.check_u32(16)?;
@@ -469,12 +469,9 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 					nibbles(f, &mut chunk)?;
 					chunk = chunk.map(|a| colors[a as usize]);
 				}
-				1 => todo!(),
+				1 => bail!(Todo("obscure AFastMode2 subformat".into())),
 				_ => {
 					match f.u8()? {
-						0 => {
-							todo!()
-						}
 						1 => {
 							let mut toggle = false;
 							#[allow(clippy::needless_range_loop)]
@@ -492,7 +489,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 								}
 							}
 						}
-						_ => panic!()
+						n => bail!(Todo(format!("obscure AFastMode2 subformat {n}")))
 					}
 				}
 			}
