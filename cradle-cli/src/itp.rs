@@ -12,7 +12,8 @@ pub fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	})?;
 	if cli.dds {
 		let output = cli.output(file, "dds")?;
-		std::fs::write(&output, cradle_dds::to_dds(&itp))?;
+		let f = std::fs::File::create(&output)?;
+		cradle_dds::to_dds(f, &itp)?;
 		tracing::info!("wrote to {output}");
 	} else {
 		let output = cli.output(file, "png")?;

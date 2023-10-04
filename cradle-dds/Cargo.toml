@@ -5,5 +5,4 @@ edition = "2021"
 
 [dependencies]
 thiserror = "1.0.0"
-gospel = "0.1.0"
 cradle.path = "../cradle"

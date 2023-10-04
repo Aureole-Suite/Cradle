@@ -1,8 +1,7 @@
 mod enums;
-pub use enums::*;
+use std::io::{Read, Write, Result, Error, ErrorKind};
 
-use gospel::read::{Reader, Le as _};
-use gospel::write::{Writer, Le as _};
+pub use enums::*;
 
 #[derive(Debug, Clone)]
 pub struct Dds {
@@ -22,8 +21,8 @@ pub struct Dds {
 }
 
 impl Dds {
-	pub fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
-		f.check(b"DDS ")?;
+	pub fn read(f: &mut impl Read) -> Result<Self> {
+		f.check_u32(u32::from_le_bytes(*b"DDS "))?;
 		f.check_u32(124)?;
 		let flags = f.u32()?;
 		let height = f.u32()?;
@@ -53,28 +52,29 @@ impl Dds {
 		})
 	}
 
-	pub fn write(&self, f: &mut Writer) {
-		f.slice(b"DDS ");
-		f.u32(124);
-		f.u32(self.flags);
-		f.u32(self.height);
-		f.u32(self.width);
-		f.u32(self.pitch);
-		f.u32(self.depth);
-		f.u32(self.mip_map_count);
+	pub fn write(&self, f: &mut impl Write) -> Result<()> {
+		f.write_all(b"DDS ")?;
+		f.u32(124)?;
+		f.u32(self.flags)?;
+		f.u32(self.height)?;
+		f.u32(self.width)?;
+		f.u32(self.pitch)?;
+		f.u32(self.depth)?;
+		f.u32(self.mip_map_count)?;
 		for v in self.reserved {
-			f.u32(v);
+			f.u32(v)?;
 		}
-		self.pixel_format.write(f);
-		f.u128(self.caps);
-		f.u32(self.reserved2);
+		self.pixel_format.write(f)?;
+		f.u128(self.caps)?;
+		f.u32(self.reserved2)?;
 
 		if let Some(dx10) = &self.dx10 {
 			assert_eq!(self.pixel_format.four_cc, *b"DX10");
-			dx10.write(f);
+			dx10.write(f)?;
 		} else {
 			assert_ne!(self.pixel_format.four_cc, *b"DX10");
 		}
+		Ok(())
 	}
 }
 
@@ -109,7 +109,7 @@ pub struct PixelFormat {
 }
 
 impl PixelFormat {
-	fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
+	fn read(f: &mut impl Read) -> Result<Self> {
 		f.check_u32(32)?;
 		Ok(PixelFormat {
 			flags: f.u32()?,
@@ -122,15 +122,16 @@ impl PixelFormat {
 		})
 	}
 
-	fn write(&self, f: &mut Writer) {
-		f.u32(32);
-		f.u32(self.flags);
-		f.array(self.four_cc);
-		f.u32(self.rgb_bit_count);
-		f.u32(self.r_bit_mask);
-		f.u32(self.g_bit_mask);
-		f.u32(self.b_bit_mask);
-		f.u32(self.a_bit_mask);
+	fn write(&self, f: &mut impl Write) -> Result<()> {
+		f.u32(32)?;
+		f.u32(self.flags)?;
+		f.write_all(&self.four_cc)?;
+		f.u32(self.rgb_bit_count)?;
+		f.u32(self.r_bit_mask)?;
+		f.u32(self.g_bit_mask)?;
+		f.u32(self.b_bit_mask)?;
+		f.u32(self.a_bit_mask)?;
+		Ok(())
 	}
 }
 
@@ -163,7 +164,7 @@ pub struct Dx10Header {
 }
 
 impl Dx10Header {
-	fn read(f: &mut Reader) -> Result<Self, gospel::read::Error> {
+	fn read(f: &mut impl Read) -> Result<Self> {
 		Ok(Dx10Header {
 			dxgi_format: f.u32()?,
 			resource_dimension: f.u32()?,
@@ -173,12 +174,13 @@ impl Dx10Header {
 		})
 	}
 
-	fn write(&self, f: &mut Writer) {
-		f.u32(self.dxgi_format);
-		f.u32(self.resource_dimension);
-		f.u32(self.misc_flag);
-		f.u32(self.array_size);
-		f.u32(self.misc_flag2);
+	fn write(&self, f: &mut impl Write) -> Result<()> {
+		f.u32(self.dxgi_format)?;
+		f.u32(self.resource_dimension)?;
+		f.u32(self.misc_flag)?;
+		f.u32(self.array_size)?;
+		f.u32(self.misc_flag2)?;
+		Ok(())
 	}
 }
 
@@ -193,3 +195,40 @@ impl Default for Dx10Header {
 		}
 	}
 }
+
+trait ReadData: Read {
+	fn array<const N: usize>(&mut self) -> Result<[u8; N]> {
+		let mut buf = [0; N];
+		self.read_exact(&mut buf)?;
+		Ok(buf)
+	}
+
+	fn u32(&mut self) -> Result<u32> {
+		self.array().map(u32::from_le_bytes)
+	}
+
+	fn u128(&mut self) -> Result<u128> {
+		self.array().map(u128::from_le_bytes)
+	}
+
+	fn check_u32(&mut self, val: u32) -> Result<()> {
+		let v = self.u32()?;
+		if v == val {
+			Ok(())
+		} else {
+			Err(Error::new(ErrorKind::InvalidData, format!("expected {val}, got {v}")))
+		}
+	}
+}
+impl<T: Read> ReadData for T {}
+
+trait WriteData: Write {
+	fn u32(&mut self, val: u32) -> Result<()> {
+		self.write_all(&val.to_le_bytes())
+	}
+
+	fn u128(&mut self, val: u128) -> Result<()> {
+		self.write_all(&val.to_le_bytes())
+	}
+}
+impl<T: Write> WriteData for T {}

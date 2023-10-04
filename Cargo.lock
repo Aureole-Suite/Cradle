@@ -215,7 +215,6 @@ name = "cradle-dds"
 version = "0.1.0"
 dependencies = [
  "cradle",
- "gospel",
  "thiserror",
 ]
 

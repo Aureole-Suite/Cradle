@@ -1,8 +1,10 @@
+use std::io::Write;
+
 use cradle::itp::{Itp, ImageData, Palette};
 
 pub mod dds;
 
-pub fn to_dds(itp: &Itp) -> Vec<u8> {
+pub fn to_dds(mut write: impl Write, itp: &Itp) -> std::io::Result<()> {
 	let Itp { status: _, width, height, ref data } = *itp;
 	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
 	let data: Vec<u8> = match &data {
@@ -67,10 +69,9 @@ pub fn to_dds(itp: &Itp) -> Vec<u8> {
 		}
 	};
 
-	let mut dds = gospel::write::Writer::new();
-	header.write(&mut dds);
-	dds.slice(&data);
-	dds.finish().unwrap()
+	header.write(&mut write)?;
+	write.write_all(&data)?;
+	Ok(())
 }
 
 fn set_mipmap(header: &mut dds::Dds, mut len: usize, imgsize: u32) {
