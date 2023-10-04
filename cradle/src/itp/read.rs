@@ -478,6 +478,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 						}
 						1 => {
 							let mut toggle = false;
+							#[allow(clippy::needless_range_loop)]
 							for j in 0..16 {
 								let mut pos = 0;
 								loop {
