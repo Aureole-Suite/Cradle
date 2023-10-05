@@ -17,6 +17,52 @@ macro_rules! bail {
 	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
 }
 
+pub fn read(f: &mut Reader) -> Result<Itp, Error> {
+	const ITP: u32 = u32::from_le_bytes(*b"ITP\xFF");
+	const PNG: u32 = u32::from_le_bytes(*b"\x89PNG");
+	const DDS: u32 = u32::from_le_bytes(*b"DDS ");
+
+	let head = f.u32()?;
+	let flags = match head {
+		PNG | DDS => return Err(Error::NotItp),
+		ITP => {
+			f.seek(f.pos() - 4)?;
+			return read_revision_3(f);
+		}
+		999  => 0x108802, // Argb16_2, None, Linear
+		1000 => 0x108801, // Indexed1, None, Linear
+		1001 => 0x110802, // Argb16_2, Bz_1, Linear
+		1002 => 0x110801, // Indexed1, Bz_1, Linear
+		1003 => 0x110402, // Argb16_2, Bz_1, Pfp_1
+		1004 => 0x110401, // Indexed1, Bz_1, Pfp_1
+		1005 => 0x210401, // Indexed2, Bz_1, Pfp_1
+		1006 => 0x400401, // Indexed3, Ccpi, Pfp_1
+		x if x & 0x40000000 != 0 => x,
+		_ => return Err(Error::NotItp),
+	};
+	let status = status_from_flags(flags)?;
+
+	if status.base_format == BFT::Indexed3 {
+		return read_ccpi(f, status);
+	}
+
+	let mut data = make_data(&status)?;
+
+	// Formats indexed1 and 2 seem to have a check for width == 0 here.
+	// Seems to be something with palette, but no idea what.
+	let width = f.u32()?;
+	let height = f.u32()?;
+
+	if let ImageData::Indexed(pal, _) = &mut data {
+		let pal_size = if matches!(head, 1000 | 1002) { 256 } else { f.u32()? as usize };
+		*pal = read_ipal(f, &status, false, pal_size)?;
+	}
+
+	read_idat(f, &status, &mut data, width as usize, height as usize)?;
+
+	Ok(Itp { status, width, height, data })
+}
+
 fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 	macro_rules! bits {
 		($($bit:expr => $v:expr,)* _ => $def:expr) => {
@@ -89,172 +135,6 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 		mipmap,
 		use_alpha,
 	})
-}
-
-pub fn read(f: &mut Reader) -> Result<Itp, Error> {
-	const ITP: u32 = u32::from_le_bytes(*b"ITP\xFF");
-	const PNG: u32 = u32::from_le_bytes(*b"\x89PNG");
-	const DDS: u32 = u32::from_le_bytes(*b"DDS ");
-
-	let head = f.u32()?;
-	let flags = match head {
-		PNG | DDS => return Err(Error::NotItp),
-		ITP => {
-			f.seek(f.pos() - 4)?;
-			return read_revision_3(f);
-		}
-		999  => 0x108802, // Argb16_2, None, Linear
-		1000 => 0x108801, // Indexed1, None, Linear
-		1001 => 0x110802, // Argb16_2, Bz_1, Linear
-		1002 => 0x110801, // Indexed1, Bz_1, Linear
-		1003 => 0x110402, // Argb16_2, Bz_1, Pfp_1
-		1004 => 0x110401, // Indexed1, Bz_1, Pfp_1
-		1005 => 0x210401, // Indexed2, Bz_1, Pfp_1
-		1006 => 0x400401, // Indexed3, Ccpi, Pfp_1
-		x if x & 0x40000000 != 0 => x,
-		_ => return Err(Error::NotItp),
-	};
-	let status = status_from_flags(flags)?;
-
-	if status.base_format == BFT::Indexed3 {
-		return read_ccpi(f, status);
-	}
-
-	let mut data = make_data(&status)?;
-
-	// Formats indexed1 and 2 seem to have a check for width == 0 here.
-	// Seems to be something with palette, but no idea what.
-	let width = f.u32()?;
-	let height = f.u32()?;
-
-	if let ImageData::Indexed(pal, _) = &mut data {
-		let pal_size = if matches!(head, 1000 | 1002) { 256 } else { f.u32()? as usize };
-		*pal = read_ipal(f, &status, false, pal_size)?;
-	}
-
-	read_idat(f, &status, &mut data, width as usize, height as usize)?;
-
-	Ok(Itp { status, width, height, data })
-}
-
-fn do_unswizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT) {
-	match pixel_format {
-		PFT::Linear => {},
-		PFT::Pfp_1 => permute::unswizzle(data, height, width, 8, 16),
-		PFT::Pfp_2 => permute::unswizzle(data, height, width, 32, 32),
-		PFT::Pfp_3 => permute::unmorton(data, height, width),
-		PFT::Pfp_4 => {
-			permute::unmorton(data, width*height/8, 8);
-			permute::unswizzle(data, height, width, 8, 1);
-		}
-	}
-}
-
-fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
-	Ok(match (status.base_format, status.pixel_bit_format) {
-		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
-			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16_1(Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16_2(Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16_3(Vec::new()),
-		(BFT::Argb32, PBFT::Argb32) => ImageData::Argb32(Vec::new()),
-		(BFT::Bc1, PBFT::Compressed) => ImageData::Bc1(Vec::new()),
-		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),
-		(BFT::Bc3, PBFT::Compressed) => ImageData::Bc3(Vec::new()),
-		(BFT::Bc7, PBFT::Compressed) => ImageData::Bc7(Vec::new()),
-		(bft, pbft) => bail!(PixelFormat { bft, pbft }),
-	})
-}
-
-fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
-	let data_size = f.u32()? as usize;
-	f.check(b"CCPI")?;
-
-	let version = f.u16()?; // ys8 only accepts 6 and 7, which are also the only ones I've seen
-	let pal_size = f.u16()? as usize;
-	let cw = 1 << f.u8()? as usize;
-	let ch = 1 << f.u8()? as usize;
-	let w = f.u16()? as usize;
-	let h = f.u16()? as usize;
-	let flags = f.u16()?;
-
-	if !matches!(version, 6 | 7) {
-		bail!(CcpiVersion(version));
-	}
-
-	status.compression = if flags & 0x8000 != 0 { CT::Bz_1 } else { CT::None };
-	let data = read_maybe_compressed(f, status.compression, data_size - 16)?;
-	let f = &mut Reader::new(&data);
-
-	let pal = if flags & (1<<9) != 0 {
-		// TODO ensure palette size is 0?
-		Palette::External(f.cstr()?.to_owned()) // palette file name
-	} else {
-		let mut pal = Vec::with_capacity(pal_size);
-		for _ in 0..pal_size {
-			pal.push(f.u32()?);
-		}
-		Palette::Embedded(pal)
-	};
-
-	let mut pixels = vec![0; w*h];
-	for y in (0..h).step_by(ch) {
-		for x in (0..w).step_by(cw) {
-			let cw = cw.min(w-x);
-			let ch = ch.min(h-y);
-			let mut chunk = read_ccpi_chunk(f, cw * ch)?;
-			permute::unswizzle(&mut chunk, ch, cw, 2, 2);
-			let mut it = chunk.into_iter();
-			for y in y..y+ch {
-				for x in x..x+cw {
-					pixels[y * w + x] = it.next().unwrap();
-				}
-			}
-		}
-	}
-	ensure_end(f)?;
-
-	Ok(Itp {
-		status,
-		width: w as u32,
-		height: h as u32,
-		data: ImageData::Indexed(pal, pixels),
-	})
-}
-
-fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
-	let mut tiles = [[0;4]; 256];
-	let n = f.u8()? as usize;
-	#[allow(clippy::needless_range_loop)]
-	for i in 0..n {
-		tiles[i] = f.array::<4>()?;
-	}
-	for i in n..(n*2).min(256) {
-		let [a,b,c,d] = tiles[i-n];
-		tiles[i] = [b,a,d,c]; // x-flip
-	}
-	for i in n*2..(n*4).min(256) {
-		let [a,b,c,d] = tiles[i-n*2];
-		tiles[i] = [c,d,a,b]; // y-flip
-	}
-
-	let mut chunk = Vec::with_capacity(len);
-	let mut last = 0;
-	while chunk.len() < len {
-		match f.u8()? {
-			0xFF => {
-				for _ in 0..f.u8()? {
-					chunk.extend(tiles[last]);
-				}
-			}
-			v => {
-				last = v as usize;
-				chunk.extend(tiles[last])
-			}
-		}
-	}
-	ensure_size(chunk.len(), len)?;
-	Ok(chunk)
 }
 
 fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
@@ -427,6 +307,126 @@ fn read_idat_simple<T, const N: usize>(
 	do_unswizzle(&mut data, width, height, status.pixel_format);
 	out.extend(data);
 	Ok(())
+}
+
+fn do_unswizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT) {
+	match pixel_format {
+		PFT::Linear => {},
+		PFT::Pfp_1 => permute::unswizzle(data, height, width, 8, 16),
+		PFT::Pfp_2 => permute::unswizzle(data, height, width, 32, 32),
+		PFT::Pfp_3 => permute::unmorton(data, height, width),
+		PFT::Pfp_4 => {
+			permute::unmorton(data, width*height/8, 8);
+			permute::unswizzle(data, height, width, 8, 1);
+		}
+	}
+}
+
+fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
+	Ok(match (status.base_format, status.pixel_bit_format) {
+		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
+			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16_1(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16_2(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16_3(Vec::new()),
+		(BFT::Argb32, PBFT::Argb32) => ImageData::Argb32(Vec::new()),
+		(BFT::Bc1, PBFT::Compressed) => ImageData::Bc1(Vec::new()),
+		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),
+		(BFT::Bc3, PBFT::Compressed) => ImageData::Bc3(Vec::new()),
+		(BFT::Bc7, PBFT::Compressed) => ImageData::Bc7(Vec::new()),
+		(bft, pbft) => bail!(PixelFormat { bft, pbft }),
+	})
+}
+
+fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
+	let data_size = f.u32()? as usize;
+	f.check(b"CCPI")?;
+
+	let version = f.u16()?; // ys8 only accepts 6 and 7, which are also the only ones I've seen
+	let pal_size = f.u16()? as usize;
+	let cw = 1 << f.u8()? as usize;
+	let ch = 1 << f.u8()? as usize;
+	let w = f.u16()? as usize;
+	let h = f.u16()? as usize;
+	let flags = f.u16()?;
+
+	if !matches!(version, 6 | 7) {
+		bail!(CcpiVersion(version));
+	}
+
+	status.compression = if flags & 0x8000 != 0 { CT::Bz_1 } else { CT::None };
+	let data = read_maybe_compressed(f, status.compression, data_size - 16)?;
+	let f = &mut Reader::new(&data);
+
+	let pal = if flags & (1<<9) != 0 {
+		// TODO ensure palette size is 0?
+		Palette::External(f.cstr()?.to_owned()) // palette file name
+	} else {
+		let mut pal = Vec::with_capacity(pal_size);
+		for _ in 0..pal_size {
+			pal.push(f.u32()?);
+		}
+		Palette::Embedded(pal)
+	};
+
+	let mut pixels = vec![0; w*h];
+	for y in (0..h).step_by(ch) {
+		for x in (0..w).step_by(cw) {
+			let cw = cw.min(w-x);
+			let ch = ch.min(h-y);
+			let mut chunk = read_ccpi_chunk(f, cw * ch)?;
+			permute::unswizzle(&mut chunk, ch, cw, 2, 2);
+			let mut it = chunk.into_iter();
+			for y in y..y+ch {
+				for x in x..x+cw {
+					pixels[y * w + x] = it.next().unwrap();
+				}
+			}
+		}
+	}
+	ensure_end(f)?;
+
+	Ok(Itp {
+		status,
+		width: w as u32,
+		height: h as u32,
+		data: ImageData::Indexed(pal, pixels),
+	})
+}
+
+fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
+	let mut tiles = [[0;4]; 256];
+	let n = f.u8()? as usize;
+	#[allow(clippy::needless_range_loop)]
+	for i in 0..n {
+		tiles[i] = f.array::<4>()?;
+	}
+	for i in n..(n*2).min(256) {
+		let [a,b,c,d] = tiles[i-n];
+		tiles[i] = [b,a,d,c]; // x-flip
+	}
+	for i in n*2..(n*4).min(256) {
+		let [a,b,c,d] = tiles[i-n*2];
+		tiles[i] = [c,d,a,b]; // y-flip
+	}
+
+	let mut chunk = Vec::with_capacity(len);
+	let mut last = 0;
+	while chunk.len() < len {
+		match f.u8()? {
+			0xFF => {
+				for _ in 0..f.u8()? {
+					chunk.extend(tiles[last]);
+				}
+			}
+			v => {
+				last = v as usize;
+				chunk.extend(tiles[last])
+			}
+		}
+	}
+	ensure_size(chunk.len(), len)?;
+	Ok(chunk)
 }
 
 fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, Error> {
