@@ -106,35 +106,34 @@ fn write_mips<T: Write>(
 	data: &[u8],
 	bpp: usize,
 ) -> eyre::Result<()> {
-	let mut mips = mipmaps(width, height, data.len(), bpp);
-	if mips.len() > 1 && !cli.png_mipmap {
-		mips.truncate(1);
-		tracing::warn!("discarding mipmaps");
-	}
-	if mips.len() > 1 {
-		png.set_animated(mips.len() as u32, 0)?;
+	let nmips = mipmaps(width, height, data.len(), bpp).count();
+	if nmips > 1 {
+		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
 		png.set_dispose_op(png::DisposeOp::Background)?;
 	}
 	let mut png = png.write_header()?;
 	let mut first = true;
-	for (w, h, range) in &mips {
+	for (w, h, range) in mipmaps(width, height, data.len(), bpp) {
 		if !std::mem::take(&mut first) {
-			png.set_frame_dimension(*w, *h)?;
+			png.set_frame_dimension(w, h)?;
 		}
 		png.write_image_data(&data[range.clone()])?;
+		if nmips > 1 && !cli.png_mipmap {
+			tracing::warn!("discarding mipmaps");
+			break
+		}
 	}
 	png.finish()?;
 	Ok(())
 }
 
-fn mipmaps(mut width: u32, mut height: u32, len: usize, bpp: usize) -> Vec<(u32, u32, Range<usize>)> {
+fn mipmaps(mut width: u32, mut height: u32, len: usize, bpp: usize) -> impl Iterator<Item=(u32, u32, Range<usize>)> {
 	let mut out = Vec::new();
 	let mut pos = 0;
 	while pos < len {
 		let size = (width*height) as usize * bpp;
 		if pos+size > len {
-			tracing::error!("bad mipmaps");
 			break
 		}
 		out.push((width, height, pos..pos+size));
@@ -142,5 +141,5 @@ fn mipmaps(mut width: u32, mut height: u32, len: usize, bpp: usize) -> Vec<(u32,
 		width >>= 1;
 		height >>= 1;
 	}
-	out
+	out.into_iter()
 }
