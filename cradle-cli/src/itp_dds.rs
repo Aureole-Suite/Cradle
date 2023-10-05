@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use cradle::itp::{Itp, ImageData, Palette};
+use cradle::itp::{Itp, ImageData, Palette, mipmaps};
 use cradle_dds as dds;
 
 pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
@@ -14,7 +14,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 			};
 			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
 			header.pixel_format.rgb_bit_count = 8;
-			set_mipmap(&mut header, data.len(), width * height);
+			set_mipmap(&mut header, width, height, data.len());
 			let mut pal2 = [0; 256];
 			pal2[..pal.len()].copy_from_slice(pal);
 			pal2.iter()
@@ -26,7 +26,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 		ImageData::Argb16_2(_) => eyre::bail!("16-bit color is not currently supported"),
 		ImageData::Argb16_3(_) => eyre::bail!("16-bit color is not currently supported"),
 		ImageData::Argb32(data) => {
-			set_mipmap(&mut header, data.len(), width * height);
+			set_mipmap(&mut header, width, height, data.len());
 			data.iter().copied()
 				.flat_map(u32::to_le_bytes)
 				.collect()
@@ -34,7 +34,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 		ImageData::Bc1(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT1";
-			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
+			set_mipmap(&mut header, width / 4, height / 4, data.len());
 			data.iter().copied()
 				.flat_map(u64::to_le_bytes)
 				.collect()
@@ -42,7 +42,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 		ImageData::Bc2(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT3";
-			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
+			set_mipmap(&mut header, width / 4, height / 4, data.len());
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
@@ -50,7 +50,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 		ImageData::Bc3(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT5";
-			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
+			set_mipmap(&mut header, width / 4, height / 4, data.len());
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
@@ -62,7 +62,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 				dxgi_format: dds::DXGI_FORMAT::BC7_UNORM,
 				..dds::Dx10Header::default()
 			});
-			set_mipmap(&mut header, data.len(), (width / 4) * (height / 4));
+			set_mipmap(&mut header, width / 4, height / 4, data.len());
 			data.iter().copied()
 				.flat_map(u128::to_le_bytes)
 				.collect()
@@ -74,16 +74,10 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn set_mipmap(header: &mut dds::Dds, mut len: usize, imgsize: u32) {
-	let mut imgsize = imgsize as usize;
-	let mut nmip = 0;
-	while len >= imgsize && imgsize > 0 {
-		len -= imgsize;
-		imgsize /= 4;
-		nmip += 1;
-	}
+fn set_mipmap(header: &mut dds::Dds, width: u32, height: u32, len: usize) {
+	let nmip = mipmaps(width, height, len).count();
 	if nmip != 1 {
 		header.flags |= dds::DDSD::MIPMAPCOUNT;
-		header.mip_map_count = nmip;
+		header.mip_map_count = nmip as u32;
 	}
 }
