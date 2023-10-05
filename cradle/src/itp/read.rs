@@ -17,84 +17,82 @@ macro_rules! bail {
 	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
 }
 
-impl ItpStatus {
-	fn from_flags(f: u32) -> Result<ItpStatus, Error> {
-		macro_rules! bits {
-			($($bit:expr => $v:expr,)* _ => $def:expr) => {
-				$(if f & (1<<$bit) != 0 { $v } else)* { $def }
-			}
+fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
+	macro_rules! bits {
+		($($bit:expr => $v:expr,)* _ => $def:expr) => {
+			$(if f & (1<<$bit) != 0 { $v } else)* { $def }
 		}
-
-		let itp_revision = bits! {
-			30 => IR::V2,
-			_ => IR::V1
-		};
-
-		let (base_format, pixel_bit_format) = bits! {
-			0 => bits! {
-				20 => (BFT::Indexed1, PBFT::Indexed),
-				21 => (BFT::Indexed2, PBFT::Indexed),
-				22 => (BFT::Indexed3, PBFT::Indexed),
-				_ => bail!(MissingFlag("indexed type"))
-			},
-			3 => (BFT::Argb16, PBFT::Argb16_1),
-			1 => (BFT::Argb16, PBFT::Argb16_2),
-			2 => (BFT::Argb16, PBFT::Argb16_3),
-			4 => (BFT::Argb32, PBFT::Argb32),
-			24 => (BFT::Bc1, PBFT::Compressed),
-			25 => (BFT::Bc2, PBFT::Compressed),
-			26 => (BFT::Bc3, PBFT::Compressed),
-			_ => bail!(MissingFlag("base format type"))
-		};
-
-		let compression = bits! {
-			15 => CT::None,
-			16 => bits! {
-				17 => CT::Bz_2,
-				_ => CT::Bz_1
-			},
-			_ => CT::None // ccpi
-		};
-
-		let pixel_format = bits! {
-			10 => PFT::Pfp_1,
-			11 => PFT::Linear,
-			12 => PFT::Pfp_2,
-			13 => if f & (7 << 24) != 0 { // For DXT formats
-				PFT::Linear
-			} else {
-				PFT::Pfp_3
-			},
-			14 => PFT::Pfp_4,
-			_ => bail!(MissingFlag("pixel format"))
-		};
-
-		let multi_plane = MPT::None;
-
-		let mipmap = MT::None;
-
-		let use_alpha = bits! {
-			28 => true,
-			29 => false,
-			_ => true
-		};
-
-		let unused: u32 = [5, 6, 7, 8, 9, 18, 19, 23, 27, 31].iter().map(|a| 1 << *a).sum();
-		if f & unused != 0 {
-			bail!(ExtraFlags(f & unused))
-		}
-
-		Ok(ItpStatus {
-			itp_revision,
-			base_format,
-			compression,
-			pixel_format,
-			pixel_bit_format,
-			multi_plane,
-			mipmap,
-			use_alpha,
-		})
 	}
+
+	let itp_revision = bits! {
+		30 => IR::V2,
+		_ => IR::V1
+	};
+
+	let (base_format, pixel_bit_format) = bits! {
+		0 => bits! {
+			20 => (BFT::Indexed1, PBFT::Indexed),
+			21 => (BFT::Indexed2, PBFT::Indexed),
+			22 => (BFT::Indexed3, PBFT::Indexed),
+			_ => bail!(MissingFlag("indexed type"))
+		},
+		3 => (BFT::Argb16, PBFT::Argb16_1),
+		1 => (BFT::Argb16, PBFT::Argb16_2),
+		2 => (BFT::Argb16, PBFT::Argb16_3),
+		4 => (BFT::Argb32, PBFT::Argb32),
+		24 => (BFT::Bc1, PBFT::Compressed),
+		25 => (BFT::Bc2, PBFT::Compressed),
+		26 => (BFT::Bc3, PBFT::Compressed),
+		_ => bail!(MissingFlag("base format type"))
+	};
+
+	let compression = bits! {
+		15 => CT::None,
+		16 => bits! {
+			17 => CT::Bz_2,
+			_ => CT::Bz_1
+		},
+		_ => CT::None // ccpi
+	};
+
+	let pixel_format = bits! {
+		10 => PFT::Pfp_1,
+		11 => PFT::Linear,
+		12 => PFT::Pfp_2,
+		13 => if f & (7 << 24) != 0 { // For DXT formats
+			PFT::Linear
+		} else {
+			PFT::Pfp_3
+		},
+		14 => PFT::Pfp_4,
+		_ => bail!(MissingFlag("pixel format"))
+	};
+
+	let multi_plane = MPT::None;
+
+	let mipmap = MT::None;
+
+	let use_alpha = bits! {
+		28 => true,
+		29 => false,
+		_ => true
+	};
+
+	let unused: u32 = [5, 6, 7, 8, 9, 18, 19, 23, 27, 31].iter().map(|a| 1 << *a).sum();
+	if f & unused != 0 {
+		bail!(ExtraFlags(f & unused))
+	}
+
+	Ok(ItpStatus {
+		itp_revision,
+		base_format,
+		compression,
+		pixel_format,
+		pixel_bit_format,
+		multi_plane,
+		mipmap,
+		use_alpha,
+	})
 }
 
 pub fn read(f: &mut Reader) -> Result<Itp, Error> {
@@ -120,7 +118,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 		x if x & 0x40000000 != 0 => x,
 		_ => return Err(Error::NotItp),
 	};
-	let status = ItpStatus::from_flags(flags)?;
+	let status = status_from_flags(flags)?;
 
 	if status.base_format == BFT::Indexed3 {
 		return read_ccpi(f, status);
