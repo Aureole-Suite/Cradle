@@ -59,11 +59,7 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 		10 => PFT::Pfp_1,
 		11 => PFT::Linear,
 		12 => PFT::Pfp_2,
-		13 => if f & (7 << 24) != 0 { // For DXT formats
-			PFT::Linear
-		} else {
-			PFT::Pfp_3
-		},
+		13 => PFT::Pfp_3,
 		14 => PFT::Pfp_4,
 		_ => bail!(MissingFlag("pixel format"))
 	};
