@@ -218,3 +218,19 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
 	read(bytes)?;
 	Ok(())
 }
+
+pub fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Item=(u32, u32, std::ops::Range<usize>)> {
+	let mut pos = 0;
+	std::iter::from_fn(move || {
+		let size = (width*height) as usize;
+		if size == 0 || pos + size > len {
+			None
+		} else {
+			let val = (width, height, pos..pos+size);
+			pos += size;
+			width >>= 1;
+			height >>= 1;
+			Some(val)
+		}
+	})
+}

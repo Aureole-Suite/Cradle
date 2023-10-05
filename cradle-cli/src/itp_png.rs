@@ -1,6 +1,6 @@
-use std::{io::Write, ops::Range};
+use std::io::Write;
 
-use cradle::itp::{Itp, ImageData, Palette};
+use cradle::itp::{Itp, ImageData, Palette, mipmaps};
 
 use crate::CLI;
 
@@ -122,20 +122,4 @@ fn write_mips<T: Write>(
 	}
 	png.finish()?;
 	Ok(())
-}
-
-fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Item=(u32, u32, Range<usize>)> {
-	let mut pos = 0;
-	std::iter::from_fn(move || {
-		let size = (width*height) as usize;
-		if size == 0 || pos + size > len {
-			None
-		} else {
-			let val = (width, height, pos..pos+size);
-			pos += size;
-			width >>= 1;
-			height >>= 1;
-			Some(val)
-		}
-	})
 }
