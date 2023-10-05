@@ -219,6 +219,22 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
 	Ok(())
 }
 
+impl ImageData {
+	pub fn pixel_count(&self) -> usize {
+		match self {
+			ImageData::Indexed(_, d) => d.len(),
+			ImageData::Argb16_1(d)   => d.len(),
+			ImageData::Argb16_2(d)   => d.len(),
+			ImageData::Argb16_3(d)   => d.len(),
+			ImageData::Argb32(d)     => d.len(),
+			ImageData::Bc1(d)        => d.len() * 16,
+			ImageData::Bc2(d)        => d.len() * 16,
+			ImageData::Bc3(d)        => d.len() * 16,
+			ImageData::Bc7(d)        => d.len() * 16,
+		}
+	}
+}
+
 pub fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Item=(u32, u32, std::ops::Range<usize>)> {
 	let mut pos = 0;
 	std::iter::from_fn(move || {
