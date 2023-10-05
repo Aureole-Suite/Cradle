@@ -42,7 +42,7 @@ fn bc_to_png<T: Copy>(
 	let mut data = data.iter().copied().flat_map(f).collect::<Vec<_>>();
 	for (w, h, range) in mipmaps(width, height, data.len(), 1) {
 		cradle::permute::unswizzle(
-			&mut data[range.clone()],
+			&mut data[range],
 			w as usize,
 			h as usize,
 			4,
@@ -118,7 +118,7 @@ fn write_mips<T: Write>(
 		if !std::mem::take(&mut first) {
 			png.set_frame_dimension(w, h)?;
 		}
-		png.write_image_data(&data[range.clone()])?;
+		png.write_image_data(&data[range])?;
 		if nmips > 1 && !cli.png_mipmap {
 			tracing::warn!("discarding mipmaps");
 			break
@@ -129,17 +129,17 @@ fn write_mips<T: Write>(
 }
 
 fn mipmaps(mut width: u32, mut height: u32, len: usize, bpp: usize) -> impl Iterator<Item=(u32, u32, Range<usize>)> {
-	let mut out = Vec::new();
 	let mut pos = 0;
-	while pos < len {
+	std::iter::from_fn(move || {
 		let size = (width*height) as usize * bpp;
-		if pos+size > len {
-			break
+		if size == 0 || pos + size > len {
+			None
+		} else {
+			let val = (width, height, pos..pos+size);
+			pos += size;
+			width >>= 1;
+			height >>= 1;
+			Some(val)
 		}
-		out.push((width, height, pos..pos+size));
-		pos += size;
-		width >>= 1;
-		height >>= 1;
-	}
-	out.into_iter()
+	})
 }
