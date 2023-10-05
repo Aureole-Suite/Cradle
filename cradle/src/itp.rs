@@ -212,13 +212,6 @@ fn show_fourcc(fourcc: [u8; 4]) -> String {
 		.collect()
 }
 
-#[cfg(test)]
-#[filetest::filetest("../../samples/itp/*")]
-fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
-	read(bytes)?;
-	Ok(())
-}
-
 impl ImageData {
 	pub fn pixel_count(&self) -> usize {
 		match self {
@@ -249,4 +242,11 @@ pub fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Ite
 			Some(val)
 		}
 	})
+}
+
+#[cfg(test)]
+#[filetest::filetest("../../samples/itp/*")]
+fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
+	read(bytes)?;
+	Ok(())
 }
