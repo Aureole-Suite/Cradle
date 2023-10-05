@@ -69,9 +69,9 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 	let mipmap = MT::None;
 
 	let use_alpha = bits! {
-		28 => true,
-		29 => false,
-		_ => true
+		28 => Some(true),
+		29 => Some(false),
+		_ => None
 	};
 
 	let unused: u32 = [5, 6, 7, 8, 9, 18, 19, 23, 27, 31].iter().map(|a| 1 << *a).sum();
@@ -291,7 +291,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 
 			b"IALP" => {
 				f.check_u32(8)?;
-				status.use_alpha = f.bool16("IALP.use_alpha")?;
+				status.use_alpha = Some(f.bool16("IALP.use_alpha")?);
 				f.check_u16(0)?;
 			}
 

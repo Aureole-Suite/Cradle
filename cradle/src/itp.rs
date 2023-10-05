@@ -120,7 +120,7 @@ pub struct ItpStatus {
 	pixel_bit_format: PixelBitFormatType,
 	multi_plane: MultiPlaneType,
 	mipmap: MipmapType,
-	use_alpha: bool,
+	use_alpha: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
