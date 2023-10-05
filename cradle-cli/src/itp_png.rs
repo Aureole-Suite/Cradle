@@ -39,7 +39,7 @@ fn bc_to_png<T: Copy>(
 	f: impl FnMut(T) -> [u32; 16],
 ) -> eyre::Result<()> {
 	let mut data = data.iter().copied().flat_map(f).collect::<Vec<_>>();
-	for (w, h, range) in mipmaps(width, height, data.len(), 1) {
+	for (w, h, range) in mipmaps(width, height, data.len()) {
 		cradle::permute::unswizzle(
 			&mut data[range],
 			w as usize,
@@ -102,7 +102,7 @@ fn write_mips<T: Write>(
 	data: &[u8],
 	bpp: usize,
 ) -> eyre::Result<()> {
-	let nmips = mipmaps(width, height, data.len(), bpp).count();
+	let nmips = mipmaps(width, height, data.len() / bpp).count();
 	if nmips > 1 {
 		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
@@ -110,11 +110,11 @@ fn write_mips<T: Write>(
 	}
 	let mut png = png.write_header()?;
 	let mut first = true;
-	for (w, h, range) in mipmaps(width, height, data.len(), bpp) {
+	for (w, h, range) in mipmaps(width, height, data.len() / bpp) {
 		if !std::mem::take(&mut first) {
 			png.set_frame_dimension(w, h)?;
 		}
-		png.write_image_data(&data[range])?;
+		png.write_image_data(&data[range.start*bpp .. range.end*bpp])?;
 		if nmips > 1 && !CLI.png_mipmap {
 			tracing::warn!("discarding mipmaps");
 			break
@@ -124,10 +124,10 @@ fn write_mips<T: Write>(
 	Ok(())
 }
 
-fn mipmaps(mut width: u32, mut height: u32, len: usize, bpp: usize) -> impl Iterator<Item=(u32, u32, Range<usize>)> {
+fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Item=(u32, u32, Range<usize>)> {
 	let mut pos = 0;
 	std::iter::from_fn(move || {
-		let size = (width*height) as usize * bpp;
+		let size = (width*height) as usize;
 		if size == 0 || pos + size > len {
 			None
 		} else {
