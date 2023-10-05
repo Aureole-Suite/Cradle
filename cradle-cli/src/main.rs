@@ -21,6 +21,12 @@ struct Cli {
 	#[clap(long)]
 	png_no_palette: bool,
 
+	/// Read and write mipmaps as APNG frames
+	///
+	/// This is mostly for debugging purposes.
+	#[clap(long)]
+	png_mipmap: bool,
+
 	/// The files to convert
 	#[clap(value_hint = ValueHint::FilePath, required = true)]
 	file: Vec<Utf8PathBuf>,
