@@ -150,10 +150,8 @@ fn do_unswizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PF
 		PFT::Pfp_2 => permute::unswizzle(data, height, width, 32, 32),
 		PFT::Pfp_3 => permute::unmorton(data, height, width),
 		PFT::Pfp_4 => {
-			for a in data.array_chunks_mut::<64>() {
-				permute::unmorton(a, 8, 8);
-			}
-			permute::unswizzle(data, height, width, 8, 1)
+			permute::unmorton(data, width*height/8, 8);
+			permute::unswizzle(data, height, width, 8, 1);
 		}
 	}
 }
