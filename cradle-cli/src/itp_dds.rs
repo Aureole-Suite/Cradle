@@ -3,10 +3,7 @@ use std::io::Write;
 use cradle::itp::{Itp, ImageData, Palette};
 use cradle_dds as dds;
 
-use crate::Cli;
-
-pub fn itp_to_dds(cli: &Cli, mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
-	let _ = cli;
+pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 	let Itp { status: _, width, height, ref data } = *itp;
 	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
 	let data: Vec<u8> = match &data {
@@ -90,4 +87,3 @@ fn set_mipmap(header: &mut dds::Dds, mut len: usize, imgsize: u32) {
 		header.mip_map_count = nmip;
 	}
 }
-

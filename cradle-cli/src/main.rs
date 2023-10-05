@@ -1,3 +1,7 @@
+#![feature(lazy_cell)]
+
+use std::sync::LazyLock;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use clap::ValueHint;
@@ -52,13 +56,14 @@ impl Cli {
 	}
 }
 
+static CLI: LazyLock<Cli> = LazyLock::new(Cli::parse);
+
 fn main() -> eyre::Result<()> {
 	init_tracing()?;
+	LazyLock::force(&CLI);
 
-	let cli = Cli::parse();
-
-	for file in &cli.file {
-		emit(process(&cli, file));
+	for file in &CLI.file {
+		emit(process(file));
 	}
 
 	Ok(())
@@ -83,7 +88,7 @@ fn init_tracing() -> Result<(), eyre::Error> {
 }
 
 #[tracing::instrument(skip_all, fields(path=%file))]
-fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
+fn process(file: &Utf8Path) -> eyre::Result<()> {
 	let ext = file.extension().unwrap_or("");
 	match ext {
 		"itp" => {
@@ -91,15 +96,15 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			let itp = tracing::info_span!("parse_itp").in_scope(|| {
 				cradle::itp::read(&data).map_err(eyre::Report::from)
 			})?;
-			if cli.dds {
-				let output = cli.output(file, "dds")?;
+			if CLI.dds {
+				let output = CLI.output(file, "dds")?;
 				let f = std::fs::File::create(&output)?;
-				itp_dds::itp_to_dds(cli, f, &itp)?;
+				itp_dds::itp_to_dds(f, &itp)?;
 				tracing::info!("wrote to {output}");
 			} else {
-				let output = cli.output(file, "png")?;
+				let output = CLI.output(file, "png")?;
 				let f = std::fs::File::create(&output)?;
-				itp_png::itp_to_png(cli, f, &itp)?;
+				itp_png::itp_to_png(f, &itp)?;
 				tracing::info!("wrote to {output}");
 			}
 		}
