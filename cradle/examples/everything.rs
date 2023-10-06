@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
 			};
 			if let Some(err) = err {
 				bar.suspend(|| {
-					println!("{} {:?}", path.display(), err);
+					eprintln!("{} {:?}", path.display(), err);
 				})
 			}
 		}
