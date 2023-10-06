@@ -91,7 +91,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 			b"IMIP" => {
 				f.check_u32(12)?;
 				status.mipmap = f.enum16("IMIP.mipmap")?;
-				n_mip = f.u16()? as usize;
+				n_mip = f.u16()? as usize + 1;
 				f.check_u32(0)?;
 			}
 
@@ -147,8 +147,8 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 
 	ensure_size(f.pos() - start, file_size)?;
 
-	if n_mip + 1 != current_mip {
-		bail!(WrongMips { expected: n_mip + 1, value: current_mip });
+	if n_mip != current_mip {
+		bail!(WrongMips { expected: n_mip, value: current_mip });
 	}
 
 	Ok(Itp { status, width, height, data })

@@ -87,7 +87,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 		let nmip = super::mipmaps(width, height, data.pixel_count()).count();
 		f.u32(12);
 		f.u16(status.mipmap as u16);
-		f.u16(nmip as u16);
+		f.u16((nmip - 1) as u16);
 		f.u32(0);
 		f
 	});
