@@ -204,6 +204,7 @@ dependencies = [
  "cradle-dxt",
  "eyre",
  "eyre-span",
+ "filetest",
  "png",
  "strength_reduce",
  "tracing",

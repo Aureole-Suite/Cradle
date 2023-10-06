@@ -19,3 +19,6 @@ tracing-error = "0.2.0"
 
 png = "0.17.7"
 strength_reduce = "0.2.4"
+
+[dev-dependencies]
+filetest = "0.1.1"

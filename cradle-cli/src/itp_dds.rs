@@ -212,3 +212,17 @@ fn test_mask() {
 		     0b11111110111111101111111011111110,
 	), 0b11011111);
 }
+
+#[cfg(test)]
+#[filetest::filetest("../../samples/itp/*.itp")]
+fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
+	use std::io::Cursor;
+	let itp = cradle::itp::read(bytes)?;
+	let mut dds_data = Vec::new();
+	itp_to_dds(Cursor::new(&mut dds_data), &itp)?;
+	let itp2 = dds_to_itp(Cursor::new(&dds_data))?;
+	let mut dds_data2 = Vec::new();
+	itp_to_dds(Cursor::new(&mut dds_data2), &itp2)?;
+	assert!(dds_data == dds_data2);
+	Ok(())
+}
