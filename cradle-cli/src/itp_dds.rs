@@ -87,7 +87,7 @@ pub fn dds_to_itp(mut read: impl Read) -> eyre::Result<Itp> {
 			.collect::<Vec<_>>();
 		let data = read_data(read, u8::from_le_bytes)?;
 
-		let max = data.iter().map(|a| *a+1).max().unwrap_or_default() as usize;
+		let max = data.iter().map(|a| *a as usize + 1).max().unwrap_or_default();
 		while palette.len() > max && palette.last() == Some(&0) {
 			palette.pop();
 		}
@@ -198,7 +198,7 @@ fn sr64(mask: u32) -> SR64 {
 }
 
 fn mask1(mask: SR64, x: u32) -> u8 {
-	((((x as u64 & mask.get()) << 8) - 1) / mask) as u8
+	(((x as u64 & mask.get()) << 8).saturating_sub(1) / mask) as u8
 }
 
 #[test]
