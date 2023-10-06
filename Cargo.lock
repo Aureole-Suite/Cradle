@@ -363,9 +363,9 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "gospel"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1c135ec4141d6fdc9fa4fb9d9b146c8f30a979f70c95c543d1551e2542572a9"
+checksum = "95806f9b14571299179599809fbea7820ab7541e1dbb0afa7c08fcaef571db39"
 dependencies = [
  "gospel-dump",
  "paste",

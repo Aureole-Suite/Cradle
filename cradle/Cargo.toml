@@ -7,13 +7,13 @@ edition = "2021"
 thiserror = "1.0.0"
 num_enum = "0.7.0"
 extend = "1.2.0"
-gospel = "0.1.0"
+gospel = "0.1.1"
 
 falcompress.path = "../../Falcompress"
 
 [dev-dependencies]
 filetest = "0.1.1"
-gospel = { version = "0.1.0", features = ["dump"] }
+gospel = { version = "0.1.1", features = ["dump"] }
 anyhow = "1.0"
 memmap2 = "0.9"
 rayon = "1.8"

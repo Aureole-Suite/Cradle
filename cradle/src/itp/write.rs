@@ -63,7 +63,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 	let start = Label::new();
 
 	let mut f = Writer::new();
-	f.label(start);
+	f.place(start);
 	f.slice(b"ITP\xFF");
 
 	chunk(&mut f, b"IHDR", {
@@ -71,7 +71,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 		f.u32(32);
 		f.u32(width);
 		f.u32(height);
-		f.delay(move |l| Ok(u32::to_le_bytes((l.label(end)? - l.label(start)?) as u32)));
+		f.diff32(start, end);
 		f.u16(status.itp_revision as u16);
 		f.u16(status.base_format as u16);
 		f.u16(status.pixel_format as u16);
@@ -129,7 +129,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 
 	chunk(&mut f, b"IEND", Writer::new());
 
-	f.label(end);
+	f.place(end);
 	Ok(f)
 }
 
