@@ -32,6 +32,17 @@ struct Cli {
 	#[clap(long)]
 	png_mipmap: bool,
 
+	/// Itp revision to write
+	///
+	/// Older revisions are more compatible, but cannot represent all pixel formats.
+	///
+	/// By default, will choose the oldest revision that can represent the pixel format, which means
+	/// - revision 1 for indexed color,
+	/// - revision 2 for 32-bit color and BC1/2/3 encoding,
+	/// - revision 3 for BC7-encoded images.
+	#[clap(long, value_parser = 1..=3, verbatim_doc_comment)]
+	itp_revision: Option<u16>,
+
 	/// The files to convert
 	#[clap(value_hint = ValueHint::FilePath, required = true)]
 	file: Vec<Utf8PathBuf>,
@@ -111,18 +122,20 @@ fn process(file: &Utf8Path) -> eyre::Result<()> {
 		}
 		"dds" => {
 			let data = std::fs::File::open(file)?;
-			let itp = tracing::info_span!("parse_dds").in_scope(|| {
+			let mut itp = tracing::info_span!("parse_dds").in_scope(|| {
 				itp_dds::dds_to_itp(&data).map_err(eyre::Report::from)
 			})?;
+			guess_itp_revision(&mut itp);
 			let output = CLI.output(file, "itp")?;
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
 		"png" => {
 			let data = std::fs::File::open(file)?;
-			let itp = tracing::info_span!("parse_png").in_scope(|| {
+			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
 				itp_png::png_to_itp(&data).map_err(eyre::Report::from)
 			})?;
+			guess_itp_revision(&mut itp);
 			let output = CLI.output(file, "itp")?;
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
@@ -130,4 +143,23 @@ fn process(file: &Utf8Path) -> eyre::Result<()> {
 		_ => eyre::bail!("unknown file extension"),
 	}
 	Ok(())
+}
+
+fn guess_itp_revision(itp: &mut cradle::itp::Itp) {
+	use cradle::itp::ItpRevision as IR;
+	itp.status.itp_revision = match CLI.itp_revision {
+		Some(1) => IR::V1,
+		Some(2) => IR::V2,
+		Some(3) => IR::V3,
+		Some(_) => unreachable!(),
+		None => match &itp.data {
+			cradle::itp::ImageData::Indexed(_, _) => IR::V1,
+			cradle::itp::ImageData::Argb16(_, _) => unimplemented!(),
+			cradle::itp::ImageData::Argb32(_) => IR::V2,
+			cradle::itp::ImageData::Bc1(_) => IR::V2,
+			cradle::itp::ImageData::Bc2(_) => IR::V2,
+			cradle::itp::ImageData::Bc3(_) => IR::V2,
+			cradle::itp::ImageData::Bc7(_) => IR::V3,
+		}
+	}
 }
