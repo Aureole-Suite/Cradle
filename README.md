@@ -5,10 +5,11 @@ A converter between some of Falcom's file formats and more conventional ones.
 
 Currently supported conversions:
 
-- itp → png
-- itp → dds
+- itp ↔ png
+- itp ↔ dds
 
-Planned features include png/dds back into itp, as well as support for itc, ch, chcp, and any other fun image formats Falcom may have cooked up.
+Planned features include support for itc, ch, chcp, and any other fun image formats Falcom may have cooked up.
+Maybe also it3 and x2/x3 if I find a good format to convert that to/from.
 
 ## Usage
 
@@ -23,3 +24,6 @@ Simply drag the files to be converted onto the executable. Use `--help` on the c
   - Ys Seven (Xseed PC)
   - Ys VIII: Lacrimosa of Dana (NISA PC)
   - Ys vs Sora no Kiseki: Alternate Saga (PSP)
+
+There exist hints that there exist ITP files with 16-bit color.
+Unfortunately I have not found any such ITPs, so these formats are not implemented.
