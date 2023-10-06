@@ -95,12 +95,6 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				data = Some(make_data(&status)?)
 			}
 
-			b"IALP" => {
-				f.check_u32(8)?;
-				status.use_alpha = Some(f.bool16("IALP.use_alpha")?);
-				f.check_u16(0)?;
-			}
-
 			b"IMIP" => {
 				f.check_u32(12)?;
 				status.mipmap = f.enum16("IMIP.mipmap")?;
@@ -108,11 +102,23 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				f.check_u32(0)?;
 			}
 
+			b"IHAS" => {
+				f.check_u32(16)?;
+				f.check_u32(0)?;
+				f.array::<8>()?;
+			}
+
 			b"IPAL" => {
 				f.check_u32(8)?;
 				let is_external = f.bool16("IPAL.is_external")?;
 				let pal_size = f.u16()? as usize;
 				pal = Some(read_ipal(f, &status, is_external, pal_size)?);
+			}
+
+			b"IALP" => {
+				f.check_u32(8)?;
+				status.use_alpha = Some(f.bool16("IALP.use_alpha")?);
+				f.check_u16(0)?;
 			}
 
 			b"IDAT" => {
@@ -127,12 +133,6 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 			}
 
 			b"IEXT" => bail!(Todo("IEXT chunk".into())),
-
-			b"IHAS" => {
-				f.check_u32(16)?;
-				f.check_u32(0)?;
-				f.array::<8>()?;
-			}
 
 			b"IEND" => break,
 			_ => bail!(BadChunk { fourcc })
