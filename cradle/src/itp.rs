@@ -5,11 +5,15 @@ use num_enum::TryFromPrimitive;
 use gospel::read::Reader;
 
 mod read;
+mod write;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("{source}")]
 	Read { #[from] source: gospel::read::Error, backtrace: std::backtrace::Backtrace },
+
+	#[error("{source}")]
+	Write { #[from] source: gospel::write::Error, backtrace: std::backtrace::Backtrace },
 
 	#[error("{source}")]
 	Compression { #[from] source: falcompress::Error, backtrace: std::backtrace::Backtrace },
@@ -18,12 +22,8 @@ pub enum Error {
 	NotItp,
 
 	#[error("{source}")]
-	Itp {
-		#[allow(private_interfaces)]
-		#[from]
-		source: ItpError,
-		backtrace: std::backtrace::Backtrace,
-	},
+	#[allow(private_interfaces)]
+	Itp { #[from] source: ItpError, backtrace: std::backtrace::Backtrace },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -31,7 +31,7 @@ enum ItpError {
 	#[error("gen2 flags missing for {0}")]
 	MissingFlag(&'static str),
 
-	#[error("gen2 extra flags: {0:032b}")]
+	#[error("gen2 extra flags: {0:08X}")]
 	ExtraFlags(u32),
 
 	#[error("bad itp chunk '{}'", show_fourcc(*fourcc))]
@@ -63,6 +63,12 @@ enum ItpError {
 
 	#[error("no palette is present for indexed format")]
 	PaletteMissing,
+
+	#[error("the specified revision cannot represent this file")]
+	Unrepresentable,
+
+	#[error("the specified format does not support external palettes")]
+	ExternalPalette,
 
 	#[error("TODO: {0}")]
 	Todo(String)
@@ -203,9 +209,11 @@ enum MipmapType {
 }
 
 pub fn read(f: &[u8]) -> Result<Itp, Error> {
-	let f = &mut Reader::new(f);
-	let itp = read::read(f)?;
-	Ok(itp)
+	read::read(&mut Reader::new(f))
+}
+
+pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
+	Ok(write::write(itp)?.finish()?)
 }
 
 fn show_fourcc(fourcc: [u8; 4]) -> String {
