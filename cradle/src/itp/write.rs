@@ -25,28 +25,27 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 	f.u32(head);
 
 	if status.base_format == BFT::Indexed3 {
-		bail!(Todo("write_ccpi".into()))
-	}
+		f.slice(&write_ccpi(itp)?);
+	} else {
+		f.u32(width);
+		f.u32(height);
 
-	f.u32(width);
-	f.u32(height);
-
-	if let ImageData::Indexed(pal, _) = data {
-		let fixed_size = matches!(head, 1000 | 1002);
-		let (is_external, pal_size, pal) = write_ipal(status, pal, fixed_size)?;
-		if is_external {
-			bail!(ExternalPalette)
+		if let ImageData::Indexed(pal, _) = data {
+			let fixed_size = matches!(head, 1000 | 1002);
+			let (is_external, pal_size, pal) = write_ipal(status, pal, fixed_size)?;
+			if is_external {
+				bail!(ExternalPalette)
+			}
+			if !fixed_size {
+				f.u32(pal_size as u32);
+			};
+			f.slice(&pal);
 		}
-		if !fixed_size {
-			f.u32(pal_size as u32);
-		};
-		f.slice(&pal);
-	}
 
-	for (width, height, range) in super::mipmaps(width, height, data.pixel_count()) {
-		f.slice(&write_idat(status, width, height, data, range)?);
+		for (width, height, range) in super::mipmaps(width, height, data.pixel_count()) {
+			f.slice(&write_idat(status, width, height, data, range)?);
+		}
 	}
-
 	Ok(f.finish()?)
 }
 
@@ -279,6 +278,78 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT)
 			permute::morton(data, width*height/8, 8);
 		}
 	}
+}
+
+fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
+	let ImageData::Indexed(pal, pixels) = &itp.data else {
+		bail!(Unrepresentable)
+	};
+
+	let mut status_copy = itp.status.clone();
+	status_copy.compression = CT::None;
+
+	let mut g = Writer::new();
+	let mut flags = 0;
+	let (external, pal_size, pal) = write_ipal(&status_copy, pal, false)?;
+	if external {
+		flags |= 1 << 9;
+	}
+
+	match itp.status.compression {
+		CT::None => {},
+		CT::Bz_1 => flags |= 1 << 15,
+		CT::Bz_2 => bail!(Unrepresentable),
+		CT::C77 => bail!(Unrepresentable),
+	}
+
+	g.slice(&pal);
+	let (cw, ch, ccpi) = encode_ccpi(itp.width as usize, itp.height as usize, pixels);
+	g.slice(&ccpi);
+
+	let mut f = Writer::new();
+	f.u32((g.len() + 16) as u32);
+	f.slice(b"CCPI");
+	f.u16(7); // version
+	f.u16(pal_size as u16);
+	f.u8(cw.ilog2() as u8);
+	f.u8(ch.ilog2() as u8);
+	f.u16(itp.width as u16);
+	f.u16(itp.height as u16);
+	f.u16(flags);
+	f.slice(&maybe_compress(itp.status.compression, &g.finish()?));
+	Ok(f.finish()?)
+}
+
+fn encode_ccpi(w: usize, h: usize, pixels: &[u8]) -> (usize, usize, Vec<u8>) {
+	// 16*32 pixels means 8*16 tiles, which is guaranteed to be less than 
+	let cw = 16;
+	let ch = 32;
+	let mut out = Vec::new();
+	for y in (0..h).step_by(ch) {
+		for x in (0..w).step_by(cw) {
+			let cw = cw.min(w-x);
+			let ch = ch.min(h-y);
+			let mut chunk = Vec::new();
+			for y in y..y+ch {
+				for x in x..x+cw {
+					chunk.push(pixels[y * w + x]);
+				}
+			}
+			permute::swizzle(&mut chunk, ch, cw, 2, 2);
+			out.extend(encode_ccpi_chunk(&chunk));
+		}
+	}
+	(cw, ch, out)
+}
+
+fn encode_ccpi_chunk(chunk: &[u8]) -> Vec<u8> {
+	let mut v = Vec::new();
+	let n = chunk.len() / 4;
+	assert!(n < 255); // intentionally not <= since 0xFF means RLE
+	v.push(n as u8);
+	v.extend(chunk);
+	v.extend(0..n as u8);
+	v
 }
 
 fn maybe_compress(compression: CT, data: &[u8]) -> Vec<u8> {

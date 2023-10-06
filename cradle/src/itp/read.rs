@@ -332,7 +332,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 		bail!(CcpiVersion(version));
 	}
 
-	let compression = if flags & 0x8000 != 0 { CT::Bz_1 } else { CT::None };
+	let compression = if flags & (1<<15) != 0 { CT::Bz_1 } else { CT::None };
 	let data = read_maybe_compressed(f, compression, data_size - 16)?;
 	let f = &mut Reader::new(&data);
 

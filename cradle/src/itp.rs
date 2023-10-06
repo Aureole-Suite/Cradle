@@ -305,10 +305,7 @@ pub fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Ite
 #[cfg(test)]
 #[filetest::filetest("../../samples/itp/*.itp")]
 fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
-	let mut itp = read(bytes)?;
-	if matches!(itp.status.base_format, BFT::Indexed2 | BFT::Indexed3) {
-		itp.status.base_format = BFT::Indexed1;
-	}
+	let itp = read(bytes)?;
 	let bytes2 = write(&itp)?;
 	let itp2 = read(&bytes2)?;
 	assert_eq!(itp, itp2);
