@@ -1,7 +1,4 @@
-#![feature(lazy_cell)]
 #![feature(array_chunks)]
-
-use std::sync::LazyLock;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
@@ -18,6 +15,16 @@ struct Cli {
 	#[clap(long, short, value_hint = ValueHint::DirPath)]
 	output: Option<Utf8PathBuf>,
 
+	#[clap(flatten)]
+	args: Args,
+
+	/// The files to convert
+	#[clap(value_hint = ValueHint::FilePath, required = true)]
+	file: Vec<Utf8PathBuf>,
+}
+
+#[derive(Debug, Clone, Default, clap::Args)]
+struct Args {
 	/// Convert images to dds instead of png
 	#[clap(long)]
 	dds: bool,
@@ -42,10 +49,6 @@ struct Cli {
 	/// - revision 3 for BC7-encoded images.
 	#[clap(long, value_parser = 1..=3, verbatim_doc_comment)]
 	itp_revision: Option<u16>,
-
-	/// The files to convert
-	#[clap(value_hint = ValueHint::FilePath, required = true)]
-	file: Vec<Utf8PathBuf>,
 }
 
 impl Cli {
@@ -68,14 +71,12 @@ impl Cli {
 	}
 }
 
-static CLI: LazyLock<Cli> = LazyLock::new(Cli::parse);
-
 fn main() -> eyre::Result<()> {
 	init_tracing()?;
-	LazyLock::force(&CLI);
+	let cli = Cli::parse();
 
-	for file in &CLI.file {
-		emit(process(file));
+	for file in &cli.file {
+		emit(process(&cli, file));
 	}
 
 	Ok(())
@@ -100,43 +101,44 @@ fn init_tracing() -> Result<(), eyre::Error> {
 }
 
 #[tracing::instrument(skip_all, fields(path=%file))]
-fn process(file: &Utf8Path) -> eyre::Result<()> {
+fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	let ext = file.extension().unwrap_or("");
+	let args = &cli.args;
 	match ext {
 		"itp" => {
 			let data = std::fs::read(file)?;
 			let itp = tracing::info_span!("parse_itp").in_scope(|| {
 				cradle::itp::read(&data).map_err(eyre::Report::from)
 			})?;
-			if CLI.dds {
-				let output = CLI.output(file, "dds")?;
+			if args.dds {
+				let output = cli.output(file, "dds")?;
 				let f = std::fs::File::create(&output)?;
-				itp_dds::itp_to_dds(f, &itp)?;
+				itp_dds::itp_to_dds(args, f, &itp)?;
 				tracing::info!("wrote to {output}");
 			} else {
-				let output = CLI.output(file, "png")?;
+				let output = cli.output(file, "png")?;
 				let f = std::fs::File::create(&output)?;
-				itp_png::itp_to_png(f, &itp)?;
+				itp_png::itp_to_png(args, f, &itp)?;
 				tracing::info!("wrote to {output}");
 			}
 		}
 		"dds" => {
 			let data = std::fs::File::open(file)?;
 			let mut itp = tracing::info_span!("parse_dds").in_scope(|| {
-				itp_dds::dds_to_itp(&data).map_err(eyre::Report::from)
+				itp_dds::dds_to_itp(args, &data).map_err(eyre::Report::from)
 			})?;
-			guess_itp_revision(&mut itp);
-			let output = CLI.output(file, "itp")?;
+			guess_itp_revision(args, &mut itp);
+			let output = cli.output(file, "itp")?;
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
 		"png" => {
 			let data = std::fs::File::open(file)?;
 			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
-				itp_png::png_to_itp(&data).map_err(eyre::Report::from)
+				itp_png::png_to_itp(args, &data).map_err(eyre::Report::from)
 			})?;
-			guess_itp_revision(&mut itp);
-			let output = CLI.output(file, "itp")?;
+			guess_itp_revision(args, &mut itp);
+			let output = cli.output(file, "itp")?;
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
@@ -145,9 +147,9 @@ fn process(file: &Utf8Path) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn guess_itp_revision(itp: &mut cradle::itp::Itp) {
+fn guess_itp_revision(args: &Args, itp: &mut cradle::itp::Itp) {
 	use cradle::itp::ItpRevision as IR;
-	itp.status.itp_revision = match CLI.itp_revision {
+	itp.status.itp_revision = match args.itp_revision {
 		Some(1) => IR::V1,
 		Some(2) => IR::V2,
 		Some(3) => IR::V3,

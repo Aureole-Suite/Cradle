@@ -2,9 +2,9 @@ use std::io::{Write, Read};
 
 use cradle::itp::{Itp, ImageData, Palette, mipmaps};
 
-use crate::CLI;
+use crate::Args;
 
-pub fn itp_to_png(f: impl Write, itp: &Itp) -> eyre::Result<()> {
+pub fn itp_to_png(args: &Args, f: impl Write, itp: &Itp) -> eyre::Result<()> {
 	let Itp { status: _, width, height, ref data } = *itp;
 	match data {
 		ImageData::Indexed(pal, data) => {
@@ -12,24 +12,25 @@ pub fn itp_to_png(f: impl Write, itp: &Itp) -> eyre::Result<()> {
 				Palette::Embedded(pal) => pal,
 				Palette::External(_) => eyre::bail!("external palette is not currently supported"),
 			};
-			if CLI.png_no_palette {
+			if args.png_no_palette {
 				let data = data.iter().map(|a| pal[*a as usize]).collect::<Vec<_>>();
-				write_png(f, width, height, &data)?;
+				write_png(args, f, width, height, &data)?;
 			} else {
-				write_indexed_png(f, width, height,pal, data)?;
+				write_indexed_png(args, f, width, height,pal, data)?;
 			}
 		},
 		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb32(data) => write_png(f, width, height, data)?,
-		ImageData::Bc1(data) => bc_to_png(f, width, height, data, cradle_dxt::decode_bc1)?,
-		ImageData::Bc2(data) => bc_to_png(f, width, height, data, cradle_dxt::decode_bc2)?,
-		ImageData::Bc3(data) => bc_to_png(f, width, height, data, cradle_dxt::decode_bc3)?,
-		ImageData::Bc7(data) => bc_to_png(f, width, height, data, cradle_dxt::decode_bc7)?,
+		ImageData::Argb32(data) => write_png(args, f, width, height, data)?,
+		ImageData::Bc1(data) => bc_to_png(args, f, width, height, data, cradle_dxt::decode_bc1)?,
+		ImageData::Bc2(data) => bc_to_png(args, f, width, height, data, cradle_dxt::decode_bc2)?,
+		ImageData::Bc3(data) => bc_to_png(args, f, width, height, data, cradle_dxt::decode_bc3)?,
+		ImageData::Bc7(data) => bc_to_png(args, f, width, height, data, cradle_dxt::decode_bc7)?,
 	}
 	Ok(())
 }
 
 fn bc_to_png<T: Copy>(
+	args: &Args,
 	w: impl Write,
 	width: u32,
 	height: u32,
@@ -46,10 +47,11 @@ fn bc_to_png<T: Copy>(
 			4,
 		);
 	}
-	write_png(w, width, height, &data)
+	write_png(args, w, width, height, &data)
 }
 
 fn write_png(
+	args: &Args,
 	mut w: impl Write,
 	width: u32,
 	height: u32,
@@ -64,11 +66,12 @@ fn write_png(
 			[r, g, b, a]
 		})
 		.collect::<Vec<_>>();
-	write_mips(png, width, height, &data, 4)?;
+	write_mips(args, png, width, height, &data, 4)?;
 	Ok(())
 }
 
 fn write_indexed_png(
+	args: &Args,
 	mut w: impl Write,
 	width: u32,
 	height: u32,
@@ -89,11 +92,12 @@ fn write_indexed_png(
 	png.set_depth(png::BitDepth::Eight);
 	png.set_palette(pal);
 	png.set_trns(alp);
-	write_mips(png, width, height, data, 1)?;
+	write_mips(args, png, width, height, data, 1)?;
 	Ok(())
 }
 
 fn write_mips<T: Write>(
+	args: &Args,
 	mut png: png::Encoder<T>,
 	width: u32,
 	height: u32,
@@ -101,7 +105,7 @@ fn write_mips<T: Write>(
 	bpp: usize,
 ) -> eyre::Result<()> {
 	let nmips = mipmaps(width, height, data.len() / bpp).count();
-	if nmips > 1 && CLI.png_mipmap {
+	if nmips > 1 && args.png_mipmap {
 		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
 		png.set_dispose_op(png::DisposeOp::Background)?;
@@ -113,7 +117,7 @@ fn write_mips<T: Write>(
 			png.set_frame_dimension(w, h)?;
 		}
 		png.write_image_data(&data[range.start*bpp .. range.end*bpp])?;
-		if nmips > 1 && !CLI.png_mipmap {
+		if nmips > 1 && !args.png_mipmap {
 			tracing::warn!("discarding mipmaps");
 			break
 		}
@@ -122,7 +126,7 @@ fn write_mips<T: Write>(
 	Ok(())
 }
 
-pub fn png_to_itp(f: impl Read) -> eyre::Result<Itp> {
+pub fn png_to_itp(args: &Args, f: impl Read) -> eyre::Result<Itp> {
 	let png = png::Decoder::new(f).read_info()?;
 	eyre::ensure!(png.info().bit_depth == png::BitDepth::Eight, "only 8-bit png is supported");
 
@@ -142,24 +146,25 @@ pub fn png_to_itp(f: impl Read) -> eyre::Result<Itp> {
 	});
 
 	let imgdata = match png.info().color_type {
-		png::ColorType::Indexed if !CLI.png_no_palette =>
-			ImageData::Indexed(Palette::Embedded(pal.unwrap()), read_frames(png, |[a]| a)?),
+		png::ColorType::Indexed if !args.png_no_palette =>
+			ImageData::Indexed(Palette::Embedded(pal.unwrap()), read_frames(args, png, |[a]| a)?),
 		png::ColorType::Indexed =>
-			ImageData::Argb32(read_frames(png, |[i]| *pal.as_ref().unwrap().get(i as usize).unwrap_or(&0))?),
+			ImageData::Argb32(read_frames(args, png, |[i]| *pal.as_ref().unwrap().get(i as usize).unwrap_or(&0))?),
 		png::ColorType::Grayscale =>
-			ImageData::Argb32(read_frames(png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?),
+			ImageData::Argb32(read_frames(args, png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?),
 		png::ColorType::GrayscaleAlpha =>
-			ImageData::Argb32(read_frames(png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?),
+			ImageData::Argb32(read_frames(args, png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?),
 		png::ColorType::Rgb =>
-			ImageData::Argb32(read_frames(png, |[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))?),
+			ImageData::Argb32(read_frames(args, png, |[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))?),
 		png::ColorType::Rgba =>
-			ImageData::Argb32(read_frames(png, |[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))?),
+			ImageData::Argb32(read_frames(args, png, |[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))?),
 	};
 
 	Ok(Itp::new(cradle::itp::ItpRevision::V3, width, height, imgdata))
 }
 
 fn read_frames<R: Read, T, const N: usize>(
+	args: &Args,
 	mut png: png::Reader<R>,
 	mut sample: impl FnMut([u8; N]) -> T,
 ) -> eyre::Result<Vec<T>> {
@@ -167,7 +172,7 @@ fn read_frames<R: Read, T, const N: usize>(
 	let mut buf = vec![0; png.output_buffer_size()];
 	let mut out = Vec::new();
 	for n in 0..n_frames {
-		if n > 1 && !CLI.png_mipmap {
+		if n > 1 && !args.png_mipmap {
 			tracing::warn!("discarding mipmaps");
 			break
 		}
@@ -186,14 +191,15 @@ fn read_frames<R: Read, T, const N: usize>(
 #[cfg(test)]
 #[filetest::filetest("../../samples/itp/*.itp")]
 fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
+	let args = &Args::default();
 	use std::io::Cursor;
 	let itp = cradle::itp::read(bytes)?;
 	let mut png_data = Vec::new();
-	itp_to_png(Cursor::new(&mut png_data), &itp)?;
+	itp_to_png(args, Cursor::new(&mut png_data), &itp)?;
 	std::fs::write("/tmp/a.png", &png_data)?;
-	let itp2 = png_to_itp(Cursor::new(&png_data))?;
+	let itp2 = png_to_itp(args, Cursor::new(&png_data))?;
 	let mut png_data2 = Vec::new();
-	itp_to_png(Cursor::new(&mut png_data2), &itp2)?;
+	itp_to_png(args, Cursor::new(&mut png_data2), &itp2)?;
 	std::fs::write("/tmp/b.png", &png_data2)?;
 	assert!(png_data == png_data2);
 	Ok(())

@@ -5,7 +5,10 @@ use cradle_dds as dds;
 
 use strength_reduce::StrengthReducedU64 as SR64;
 
-pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
+use crate::Args;
+
+pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
+	let _ = args;
 	let Itp { status: _, width, height, ref data } = *itp;
 	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
 
@@ -75,7 +78,8 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 	Ok(())
 }
 
-pub fn dds_to_itp(mut read: impl Read) -> eyre::Result<Itp> {
+pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
+	let _ = args;
 	let mut dds = dds::Dds::read(&mut read)?;
 	un_dxgi(&mut dds);
 	let pf = &dds.pixel_format;
@@ -216,14 +220,15 @@ fn test_mask() {
 #[cfg(test)]
 #[filetest::filetest("../../samples/itp/*.itp")]
 fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
+	let args = &Args::default();
 	use std::io::Cursor;
 	let itp = cradle::itp::read(bytes)?;
 	let mut dds_data = Vec::new();
-	itp_to_dds(Cursor::new(&mut dds_data), &itp)?;
-	let itp2 = dds_to_itp(Cursor::new(&dds_data))?;
+	itp_to_dds(args, Cursor::new(&mut dds_data), &itp)?;
+	let itp2 = dds_to_itp(args, Cursor::new(&dds_data))?;
 	assert_eq!(itp.data, itp2.data);
 	let mut dds_data2 = Vec::new();
-	itp_to_dds(Cursor::new(&mut dds_data2), &itp2)?;
+	itp_to_dds(args, Cursor::new(&mut dds_data2), &itp2)?;
 	assert!(dds_data == dds_data2);
 	Ok(())
 }
