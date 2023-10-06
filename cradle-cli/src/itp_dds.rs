@@ -3,6 +3,8 @@ use std::io::{Write, Read};
 use cradle::itp::{Itp, ImageData, Palette, mipmaps};
 use cradle_dds as dds;
 
+use strength_reduce::StrengthReducedU64 as SR64;
+
 pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 	let Itp { status: _, width, height, ref data } = *itp;
 	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
@@ -114,7 +116,12 @@ pub fn dds_to_itp(mut read: impl Read) -> eyre::Result<Itp> {
 			_ => eyre::bail!("I don't understand this dds (fourcc)")
 		}
 	} else if pf.flags & dds::DDPF::RGB != 0 {
-		let cmask = (pf.rmask, pf.gmask, pf.bmask, pf.amask);
+		let cmask = (
+			sr64(pf.rmask),
+			sr64(pf.gmask),
+			sr64(pf.bmask),
+			sr64(pf.amask),
+		);
 		match pf.bpp {
 			32 => ImageData::Argb32(read_data(read, |d| mask(cmask, u32::from_le_bytes(d)))?),
 			16 => ImageData::Argb32(read_data(read, |d| mask(cmask, u16::from_le_bytes(d) as u32))?),
@@ -173,7 +180,7 @@ fn un_dxgi(dds: &mut dds::Dds) {
 	}
 }
 
-fn mask((r, g, b, a): (u32, u32, u32, u32), x: u32) -> u32 {
+fn mask((r, g, b, a): (SR64, SR64, SR64, SR64), x: u32) -> u32 {
 	u32::from_le_bytes([
 		mask1(b, x),
 		mask1(g, x),
@@ -182,22 +189,26 @@ fn mask((r, g, b, a): (u32, u32, u32, u32), x: u32) -> u32 {
 	])
 }
 
-// TODO optimize this with strength_reduce
-fn mask1(mask: u32, x: u32) -> u8 {
-	if mask == 0 { return 0 }
-	let mask = mask as u64;
-	let x = x as u64;
-	((((x & mask) << 8) - 1) / mask) as u8
+fn sr64(mask: u32) -> SR64 {
+	if mask == 0 {
+		SR64::new(u64::MAX)
+	} else {
+		SR64::new(mask as u64)
+	}
+}
+
+fn mask1(mask: SR64, x: u32) -> u8 {
+	((((x as u64 & mask.get()) << 8) - 1) / mask) as u8
 }
 
 #[test]
 fn test_mask() {
-	assert_eq!(mask1(0xF000, 0x1234), 0x11);
-	assert_eq!(mask1(0b011100000, 0b001100000), 0b01101101);
-	assert_eq!(mask1(0x00FE0000, 0xFEFEFEFE), 0xFF);
-	assert_eq!(mask1(0xFE000000, 0xFEFEFEFE), 0xFF);
+	assert_eq!(mask1(sr64(0xF000), 0x1234), 0x11);
+	assert_eq!(mask1(sr64(0b011100000), 0b001100000), 0b01101101);
+	assert_eq!(mask1(sr64(0x00FE0000), 0xFEFEFEFE), 0xFF);
+	assert_eq!(mask1(sr64(0xFE000000), 0xFEFEFEFE), 0xFF);
 	assert_eq!(mask1(
-		0b00000111111111100000000000000000,
-		0b11111110111111101111111011111110,
+		sr64(0b00000111111111100000000000000000),
+		     0b11111110111111101111111011111110,
 	), 0b11011111);
 }
