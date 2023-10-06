@@ -19,9 +19,7 @@ pub fn itp_to_png(f: impl Write, itp: &Itp) -> eyre::Result<()> {
 				write_indexed_png(f, width, height,pal, data)?;
 			}
 		},
-		ImageData::Argb16_1(_) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb16_2(_) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb16_3(_) => eyre::bail!("16-bit color is not currently supported"),
+		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
 		ImageData::Argb32(data) => write_png(f, width, height, data)?,
 		ImageData::Bc1(data) => bc_to_png(f, width, height, data, cradle_dxt::decode_bc1)?,
 		ImageData::Bc2(data) => bc_to_png(f, width, height, data, cradle_dxt::decode_bc2)?,

@@ -12,6 +12,7 @@ use super::CompressionType as CT;
 use super::PixelFormatType as PFT;
 use super::MultiPlaneType as MPT;
 use super::MipmapType as MT;
+use super::Argb16Mode as A16;
 
 macro_rules! bail {
 	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
@@ -326,9 +327,9 @@ fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
 	Ok(match (status.base_format, status.pixel_bit_format) {
 		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
 			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16_1(Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16_2(Vec::new()),
-		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16_3(Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16(A16::Mode1, Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16(A16::Mode2, Vec::new()),
+		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16(A16::Mode3, Vec::new()),
 		(BFT::Argb32, PBFT::Argb32) => ImageData::Argb32(Vec::new()),
 		(BFT::Bc1, PBFT::Compressed) => ImageData::Bc1(Vec::new()),
 		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),

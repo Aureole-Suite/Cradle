@@ -79,9 +79,7 @@ pub struct Itp {
 #[derive(Clone)]
 pub enum ImageData {
 	Indexed(Palette, Vec<u8>),
-	Argb16_1(Vec<u16>),
-	Argb16_2(Vec<u16>),
-	Argb16_3(Vec<u16>),
+	Argb16(Argb16Mode, Vec<u16>),
 	Argb32(Vec<u32>),
 	Bc1(Vec<u64>),
 	Bc2(Vec<u128>),
@@ -89,13 +87,18 @@ pub enum ImageData {
 	Bc7(Vec<u128>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Argb16Mode {
+	Mode1,
+	Mode2,
+	Mode3,
+}
+
 impl std::fmt::Debug for ImageData {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
 			Self::Indexed(pal, data) => f.debug_tuple("Indexed").field(pal).field(&data.len()).finish(),
-			Self::Argb16_1(data) => f.debug_tuple("Argb16_1").field(&data.len()).finish(),
-			Self::Argb16_2(data) => f.debug_tuple("Argb16_2").field(&data.len()).finish(),
-			Self::Argb16_3(data) => f.debug_tuple("Argb16_3").field(&data.len()).finish(),
+			Self::Argb16(mode, data) => f.debug_tuple("Argb16").field(mode).field(&data.len()).finish(),
 			Self::Argb32(data) => f.debug_tuple("Argb32").field(&data.len()).finish(),
 			Self::Bc1(data) => f.debug_tuple("Bc1").field(&data.len()).finish(),
 			Self::Bc2(data) => f.debug_tuple("Bc2").field(&data.len()).finish(),
@@ -216,9 +219,7 @@ impl ImageData {
 	pub fn pixel_count(&self) -> usize {
 		match self {
 			ImageData::Indexed(_, d) => d.len(),
-			ImageData::Argb16_1(d)   => d.len(),
-			ImageData::Argb16_2(d)   => d.len(),
-			ImageData::Argb16_3(d)   => d.len(),
+			ImageData::Argb16(_, d)  => d.len(),
 			ImageData::Argb32(d)     => d.len(),
 			ImageData::Bc1(d)        => d.len() * 16,
 			ImageData::Bc2(d)        => d.len() * 16,

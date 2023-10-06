@@ -28,9 +28,7 @@ pub fn itp_to_dds(mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 				.chain(data.iter().copied())
 				.collect()
 		}
-		ImageData::Argb16_1(_) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb16_2(_) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb16_3(_) => eyre::bail!("16-bit color is not currently supported"),
+		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
 		ImageData::Argb32(data) => {
 			data.iter().copied()
 				.flat_map(u32::to_le_bytes)
