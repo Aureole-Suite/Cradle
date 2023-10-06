@@ -101,7 +101,7 @@ fn write_mips<T: Write>(
 	bpp: usize,
 ) -> eyre::Result<()> {
 	let nmips = mipmaps(width, height, data.len() / bpp).count();
-	if nmips > 1 {
+	if nmips > 1 && CLI.png_mipmap {
 		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
 		png.set_dispose_op(png::DisposeOp::Background)?;
