@@ -285,7 +285,7 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: us
 			imgdata.extend(data);
 		}
 		BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
-		BFT::Argb16 => bail!(Todo("Argb16".to_owned())),
+		BFT::Argb16 => read_idat_simple(f, status, width, height, u16::from_le_bytes, dat!(Argb16))?,
 		BFT::Argb32 => read_idat_simple(f, status, width, height, u32::from_le_bytes, dat!(Argb32))?,
 		BFT::Bc1 => read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes, dat!(Bc1))?,
 		BFT::Bc2 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc2))?,
