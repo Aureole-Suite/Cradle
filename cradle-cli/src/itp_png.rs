@@ -40,8 +40,8 @@ fn bc_to_png<T: Copy>(
 	for (w, h, range) in mipmaps(width, height, data.len()) {
 		cradle::permute::unswizzle(
 			&mut data[range],
-			w as usize,
 			h as usize,
+			w as usize,
 			4,
 			4,
 		);
