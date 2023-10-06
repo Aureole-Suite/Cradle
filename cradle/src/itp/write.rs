@@ -10,36 +10,6 @@ macro_rules! bail {
 	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
 }
 
-pub fn make_itp(itp_revision: IR, width: u32, height: u32, data: ImageData) -> Itp {
-	let (base_format, pixel_bit_format) = match &data {
-		ImageData::Indexed(_, _)         => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
-		ImageData::Argb16(A16::Mode1, _) => (BFT::Argb16, PBFT::Argb16_1),
-		ImageData::Argb16(A16::Mode2, _) => (BFT::Argb16, PBFT::Argb16_2),
-		ImageData::Argb16(A16::Mode3, _) => (BFT::Argb16, PBFT::Argb16_3),
-		ImageData::Argb32(_)             => (BFT::Argb32, PBFT::Argb32),
-		ImageData::Bc1(_)                => (BFT::Bc1, PBFT::Compressed),
-		ImageData::Bc2(_)                => (BFT::Bc2, PBFT::Compressed),
-		ImageData::Bc3(_)                => (BFT::Bc3, PBFT::Compressed),
-		ImageData::Bc7(_)                => (BFT::Bc7, PBFT::Compressed),
-	};
-	let nmip = super::mipmaps(width, height, data.pixel_count()).count();
-	Itp {
-		status: ItpStatus {
-			itp_revision,
-			base_format,
-			compression: CT::None,
-			pixel_format: PFT::Linear,
-			pixel_bit_format,
-			multi_plane: MPT::None,
-			mipmap: if nmip > 1 { MT::Mipmap_1 } else { MT::None },
-			use_alpha: None,
-		},
-		width,
-		height,
-		data,
-	}
-}
-
 pub fn write(itp: &Itp) -> Result<Writer, Error> {
 	let Itp { ref status, width, height, ref data } = *itp;
 
