@@ -122,19 +122,19 @@ pub enum Palette {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ItpStatus {
-	itp_revision: ItpRevision,
-	base_format: BaseFormatType,
-	compression: CompressionType,
-	pixel_format: PixelFormatType,
-	pixel_bit_format: PixelBitFormatType,
-	multi_plane: MultiPlaneType,
-	mipmap: MipmapType,
-	use_alpha: Option<bool>,
+	pub itp_revision: ItpRevision,
+	pub base_format: BaseFormatType,
+	pub compression: CompressionType,
+	pub pixel_format: PixelFormatType,
+	pub pixel_bit_format: PixelBitFormatType,
+	pub multi_plane: MultiPlaneType,
+	pub mipmap: MipmapType,
+	pub use_alpha: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum ItpRevision {
+pub enum ItpRevision {
 	V1 = 1, // 999..=1006
 	V2 = 2, // flag-based
 	#[default]
@@ -143,7 +143,7 @@ enum ItpRevision {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum BaseFormatType {
+pub enum BaseFormatType {
 	Indexed1 = 0, // 256 color
 	Indexed2 = 1,
 	Indexed3 = 2,
@@ -160,7 +160,7 @@ enum BaseFormatType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum PixelBitFormatType {
+pub enum PixelBitFormatType {
 	Indexed = 0,
 	Argb16_1 = 1,
 	Argb16_2 = 2,
@@ -173,7 +173,7 @@ enum PixelBitFormatType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum PixelFormatType {
+pub enum PixelFormatType {
 	#[default]
 	Linear = 0,
 	Pfp_1 = 1,
@@ -184,7 +184,7 @@ enum PixelFormatType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum CompressionType {
+pub enum CompressionType {
 	#[default]
 	None = 0,
 	Bz_1 = 1,
@@ -194,14 +194,14 @@ enum CompressionType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum MultiPlaneType {
+pub enum MultiPlaneType {
 	#[default]
 	None = 0,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
-enum MipmapType {
+pub enum MipmapType {
 	#[default]
 	None = 0,
 	Mipmap_1 = 1,
