@@ -263,34 +263,26 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 }
 
 fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: usize, height: usize) -> Result<(), Error> {
-	let bft = status.base_format;
-	macro_rules! dat {
-		($variant:ident) => {
-			if let ImageData::$variant(.., data) = data {
+	match data {
+		ImageData::Indexed(_, data) => match status.base_format {
+			BFT::Indexed1 => data.extend(read_idat_simple(f, status, width, height, u8::from_le_bytes)?),
+			BFT::Indexed2 => data.extend({
+				let size = f.u32()? as usize;
+				let data = read_maybe_compressed(f, status.compression, size)?;
+				let g = &mut Reader::new(&data);
+				let data = a_fast_mode2(g, width, height)?;
+				ensure_end(g)?;
 				data
-			} else {
-				unreachable!()
-			}
-		}
-	}
-	match bft {
-		BFT::Indexed1 => read_idat_simple(f, status, width, height, u8::from_le_bytes, dat!(Indexed))?,
-		BFT::Indexed2 => {
-			let imgdata = dat!(Indexed);
-			let size = f.u32()? as usize;
-			let data = read_maybe_compressed(f, status.compression, size)?;
-			let g = &mut Reader::new(&data);
-			let data = a_fast_mode2(g, width, height)?;
-			ensure_end(g)?;
-			imgdata.extend(data);
-		}
-		BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
-		BFT::Argb16 => read_idat_simple(f, status, width, height, u16::from_le_bytes, dat!(Argb16))?,
-		BFT::Argb32 => read_idat_simple(f, status, width, height, u32::from_le_bytes, dat!(Argb32))?,
-		BFT::Bc1 => read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes, dat!(Bc1))?,
-		BFT::Bc2 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc2))?,
-		BFT::Bc3 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc3))?,
-		BFT::Bc7 => read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes, dat!(Bc7))?,
+			}),
+			BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
+			_ => unreachable!()
+		},
+		ImageData::Argb16(_, data) => data.extend(read_idat_simple(f, status, width, height, u16::from_le_bytes)?),
+		ImageData::Argb32(data) => data.extend(read_idat_simple(f, status, width, height, u32::from_le_bytes)?),
+		ImageData::Bc1(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes)?),
+		ImageData::Bc2(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes)?),
+		ImageData::Bc3(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes)?),
+		ImageData::Bc7(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes)?),
 	}
 	Ok(())
 }
@@ -301,13 +293,11 @@ fn read_idat_simple<T, const N: usize>(
 	width: usize,
 	height: usize,
 	from_le_bytes: fn([u8; N]) -> T,
-	out: &mut Vec<T>,
-) -> Result<(), Error> {
+) -> Result<Vec<T>, Error> {
 	let data = read_maybe_compressed(f, status.compression, width * height * N)?;
 	let mut data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
 	do_unswizzle(&mut data, width, height, status.pixel_format);
-	out.extend(data);
-	Ok(())
+	Ok(data)
 }
 
 fn do_unswizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT) {
