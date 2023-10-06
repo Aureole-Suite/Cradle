@@ -221,6 +221,7 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
 	let mut dds_data = Vec::new();
 	itp_to_dds(Cursor::new(&mut dds_data), &itp)?;
 	let itp2 = dds_to_itp(Cursor::new(&dds_data))?;
+	assert_eq!(itp.data, itp2.data);
 	let mut dds_data2 = Vec::new();
 	itp_to_dds(Cursor::new(&mut dds_data2), &itp2)?;
 	assert!(dds_data == dds_data2);
