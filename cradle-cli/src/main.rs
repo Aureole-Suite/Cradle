@@ -118,6 +118,15 @@ fn process(file: &Utf8Path) -> eyre::Result<()> {
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
+		"png" => {
+			let data = std::fs::File::open(file)?;
+			let itp = tracing::info_span!("parse_png").in_scope(|| {
+				itp_png::png_to_itp(&data).map_err(eyre::Report::from)
+			})?;
+			let output = CLI.output(file, "itp")?;
+			std::fs::write(&output, cradle::itp::write(&itp)?)?;
+			tracing::info!("wrote to {output}");
+		}
 		_ => eyre::bail!("unknown file extension"),
 	}
 	Ok(())

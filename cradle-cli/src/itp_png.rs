@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Write, Read};
 
 use cradle::itp::{Itp, ImageData, Palette, mipmaps};
 
@@ -119,5 +119,82 @@ fn write_mips<T: Write>(
 		}
 	}
 	png.finish()?;
+	Ok(())
+}
+
+pub fn png_to_itp(f: impl Read) -> eyre::Result<Itp> {
+	let png = png::Decoder::new(f).read_info()?;
+	eyre::ensure!(png.info().bit_depth == png::BitDepth::Eight, "only 8-bit png is supported");
+
+	let width = png.info().width;
+	let height = png.info().height;
+
+	let pal = png.info().palette.as_ref().map(|pal| {
+		let mut pal = pal.array_chunks()
+			.map(|&[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))
+			.collect::<Vec<_>>();
+		if let Some(trns) = &png.info().trns {
+			for (rgb, a) in pal.iter_mut().zip(trns.iter()) {
+				*rgb = *rgb & 0xFFFFFF | (*a as u32) << 24;
+			}
+		}
+		pal
+	});
+
+	let imgdata = match png.info().color_type {
+		png::ColorType::Indexed if !CLI.png_no_palette =>
+			ImageData::Indexed(Palette::Embedded(pal.unwrap()), read_frames(png, |[a]| a)?),
+		png::ColorType::Indexed =>
+			ImageData::Argb32(read_frames(png, |[i]| *pal.as_ref().unwrap().get(i as usize).unwrap_or(&0))?),
+		png::ColorType::Grayscale =>
+			ImageData::Argb32(read_frames(png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?),
+		png::ColorType::GrayscaleAlpha =>
+			ImageData::Argb32(read_frames(png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?),
+		png::ColorType::Rgb =>
+			ImageData::Argb32(read_frames(png, |[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))?),
+		png::ColorType::Rgba =>
+			ImageData::Argb32(read_frames(png, |[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))?),
+	};
+
+	Ok(Itp::new(cradle::itp::ItpRevision::V3, width, height, imgdata))
+}
+
+fn read_frames<R: Read, T, const N: usize>(
+	mut png: png::Reader<R>,
+	mut sample: impl FnMut([u8; N]) -> T,
+) -> eyre::Result<Vec<T>> {
+	let n_frames = png.info().animation_control.map_or(1, |ac| ac.num_frames);
+	let mut buf = vec![0; png.output_buffer_size()];
+	let mut out = Vec::new();
+	for n in 0..n_frames {
+		if n > 1 && !CLI.png_mipmap {
+			tracing::warn!("discarding mipmaps");
+			break
+		}
+		let frame = png.next_frame(&mut buf)?;
+		eyre::ensure!(frame.width == png.info().width >> n, "invalid frame width");
+		eyre::ensure!(frame.height == png.info().height >> n, "invalid frame height");
+		out.extend(
+			buf[..frame.buffer_size()].array_chunks()
+			.copied()
+			.map(&mut sample)
+		)
+	}
+	Ok(out)
+}
+
+#[cfg(test)]
+#[filetest::filetest("../../samples/itp/*.itp")]
+fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
+	use std::io::Cursor;
+	let itp = cradle::itp::read(bytes)?;
+	let mut png_data = Vec::new();
+	itp_to_png(Cursor::new(&mut png_data), &itp)?;
+	std::fs::write("/tmp/a.png", &png_data)?;
+	let itp2 = png_to_itp(Cursor::new(&png_data))?;
+	let mut png_data2 = Vec::new();
+	itp_to_png(Cursor::new(&mut png_data2), &itp2)?;
+	std::fs::write("/tmp/b.png", &png_data2)?;
+	assert!(png_data == png_data2);
 	Ok(())
 }
