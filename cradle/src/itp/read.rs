@@ -59,7 +59,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 		*pal = read_ipal(f, &status, false, pal_size)?;
 	}
 
-	read_idat(f, &status, &mut data, width as usize, height as usize)?;
+	read_idat(f, &status, &mut data, width, height)?;
 
 	Ok(Itp { status, width, height, data })
 }
@@ -83,8 +83,8 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		match &fourcc {
 			b"IHDR" => {
 				f.check_u32(32)?;
-				width = f.u32()? as usize;
-				height = f.u32()? as usize;
+				width = f.u32()?;
+				height = f.u32()?;
 				file_size = f.u32()? as usize;
 				status.itp_revision = f.enum16("IHDR.itp_revision")?;
 				status.base_format = f.enum16("IHDR.base_format")?;
@@ -159,12 +159,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		bail!(WrongMips { expected: n_mip + 1, value: current_mip });
 	}
 
-	Ok(Itp {
-		status,
-		width: width as u32,
-		height: height as u32,
-		data,
-	})
+	Ok(Itp { status, width, height, data })
 }
 
 fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
@@ -262,7 +257,7 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 	}
 }
 
-fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: usize, height: usize) -> Result<(), Error> {
+fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: u32, height: u32) -> Result<(), Error> {
 	match data {
 		ImageData::Indexed(_, data) => match status.base_format {
 			BFT::Indexed1 => data.extend(read_idat_simple(f, status, width, height, u8::from_le_bytes)?),
@@ -290,13 +285,13 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: us
 fn read_idat_simple<T, const N: usize>(
 	f: &mut Reader,
 	status: &ItpStatus,
-	width: usize,
-	height: usize,
+	width: u32,
+	height: u32,
 	from_le_bytes: fn([u8; N]) -> T,
 ) -> Result<Vec<T>, Error> {
-	let data = read_maybe_compressed(f, status.compression, width * height * N)?;
+	let data = read_maybe_compressed(f, status.compression, (width * height) as usize * N)?;
 	let mut data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
-	do_unswizzle(&mut data, width, height, status.pixel_format);
+	do_unswizzle(&mut data, width as usize, height as usize, status.pixel_format);
 	Ok(data)
 }
 
@@ -420,7 +415,7 @@ fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 	Ok(chunk)
 }
 
-fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, Error> {
+fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Error> {
 	fn nibbles(f: &mut Reader, out: &mut [u8]) -> Result<(), Error> {
 		for i in 0..out.len()/2 {
 			let x = f.u8()?;
@@ -430,7 +425,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 		Ok(())
 	}
 
-	let mut ncolors = vec![0; (height/8)*(width/16)];
+	let mut ncolors = vec![0; ((height/8)*(width/16)) as usize];
 	nibbles(f, &mut ncolors)?;
 	for a in &mut ncolors {
 		if *a != 0 {
@@ -442,7 +437,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 	let c = &mut Reader::new(f.slice(totalcolors)?);
 	let mode = f.u8()?;
 
-	let mut data = Vec::with_capacity(height*width);
+	let mut data = Vec::with_capacity((height*width) as usize);
 	for ncolors in ncolors {
 		let mut chunk = [0; 8*16];
 		if ncolors != 0 {
@@ -481,7 +476,7 @@ fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Vec<u8>, 
 	}
 	ensure_end(c)?;
 
-	permute::unswizzle(&mut data, height, width, 8, 16);
+	permute::unswizzle(&mut data, height as usize, width as usize, 8, 16);
 
 	Ok(data)
 }
