@@ -10,7 +10,7 @@ macro_rules! bail {
 	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
 }
 
-pub fn write(itp: &Itp) -> Result<Writer, Error> {
+pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 	let Itp { ref status, width, height, ref data } = *itp;
 
 	let Some(head) = (match status.itp_revision {
@@ -40,17 +40,17 @@ pub fn write(itp: &Itp) -> Result<Writer, Error> {
 		if !fixed_size {
 			f.u32(pal_size as u32);
 		};
-		f.append(pal);
+		f.slice(&pal);
 	}
 
 	for (width, height, range) in super::mipmaps(width, height, data.pixel_count()) {
-		f.append(write_idat(status, width, height, data, range)?);
+		f.slice(&write_idat(status, width, height, data, range)?);
 	}
 
-	Ok(f)
+	Ok(f.finish()?)
 }
 
-fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
+fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 	fn chunk(f: &mut Writer, fourcc: &[u8; 4], body: Writer) {
 		f.slice(fourcc);
 		f.u32(body.len() as u32);
@@ -59,8 +59,8 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 
 	let Itp { ref status, width, height, ref data } = *itp;
 
-	let end = Label::new();
 	let start = Label::new();
+	let end = Label::new();
 
 	let mut f = Writer::new();
 	f.place(start);
@@ -101,7 +101,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 			f.u32(8);
 			f.u16(is_external as u16);
 			f.u16(pal_size as u16);
-			f.append(pal);
+			f.slice(&pal);
 			f
 		});
 	}
@@ -122,7 +122,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 			f.u32(8);
 			f.u16(0);
 			f.u16(n as u16);
-			f.append(write_idat(status, width, height, data, range)?);
+			f.slice(&write_idat(status, width, height, data, range)?);
 			f
 		});
 	}
@@ -130,7 +130,7 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 	chunk(&mut f, b"IEND", Writer::new());
 
 	f.place(end);
-	Ok(f)
+	Ok(f.finish()?)
 }
 
 pub fn status_to_flags(status: &ItpStatus) -> Option<u32> {
@@ -212,7 +212,7 @@ pub fn flags_to_gen1(flags: u32) -> Option<u32> {
 	})
 }
 
-fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bool, usize, Writer), Error> {
+fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bool, usize, Vec<u8>), Error> {
 	match pal {
 		Palette::Embedded(pal) => {
 			let mut colors = pal.to_owned();
@@ -231,15 +231,15 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 				f.u32(color);
 			}
 
-			Ok((false, pal.len(), maybe_compress(status.compression, &f.finish()?)?))
+			Ok((false, pal.len(), maybe_compress(status.compression, &f.finish()?)))
 		},
 		Palette::External(_) => bail!(Todo(String::from("external IPAL"))),
 	}
 }
 
-fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, range: std::ops::Range<usize>) -> Result<Writer, Error> {
+fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, range: std::ops::Range<usize>) -> Result<Vec<u8>, Error> {
 	let bc_range = range.start/16 .. range.end/16;
-	match data {
+	Ok(match data {
 		ImageData::Indexed(_, data) => match status.base_format {
 			BFT::Indexed1 => write_idat_simple(&data[range], status, width, height, u8::to_le_bytes),
 			BFT::Indexed2 => bail!(Todo("can not currently write AFastMode2".to_owned())),
@@ -252,7 +252,7 @@ fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, ran
 		ImageData::Bc2(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
 		ImageData::Bc3(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
 		ImageData::Bc7(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
-	}
+	})
 }
 
 fn write_idat_simple<T: Clone, const N: usize>(
@@ -261,7 +261,7 @@ fn write_idat_simple<T: Clone, const N: usize>(
 	width: u32,
 	height: u32,
 	to_le_bytes: fn(T) -> [u8; N],
-) -> Result<Writer, Error> {
+) -> Vec<u8> {
 	let mut data = data.to_vec();
 	do_swizzle(&mut data, width as usize, height as usize, status.pixel_format);
 	let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
@@ -281,13 +281,11 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT)
 	}
 }
 
-fn maybe_compress(compression: CT, data: &[u8]) -> Result<Writer, Error> {
-	let mut f = Writer::new();
+fn maybe_compress(compression: CT, data: &[u8]) -> Vec<u8> {
 	if compression == CT::None {
-		f.slice(data)
+		data.to_owned()
 	} else {
 		// TODO
-		falcompress::bzip::compress_ed7(&mut f, data, Default::default())
+		falcompress::bzip::compress_ed7_to_vec(data, Default::default())
 	}
-	Ok(f)
 }

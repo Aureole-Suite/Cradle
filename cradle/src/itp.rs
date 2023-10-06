@@ -222,11 +222,15 @@ pub mod abbr {
 use abbr::*;
 
 pub fn read(f: &[u8]) -> Result<Itp, Error> {
-	read::read(&mut Reader::new(f))
+	read_from(&mut Reader::new(f))
+}
+
+pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
+	read::read(f)
 }
 
 pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
-	Ok(write::write(itp)?.finish()?)
+	write::write(itp)
 }
 
 fn show_fourcc(fourcc: [u8; 4]) -> String {
