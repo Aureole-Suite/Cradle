@@ -238,6 +238,7 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 }
 
 fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, range: std::ops::Range<usize>) -> Result<Writer, Error> {
+	let bc_range = range.start/16 .. range.end/16;
 	match data {
 		ImageData::Indexed(_, data) => match status.base_format {
 			BFT::Indexed1 => write_idat_simple(&data[range], status, width, height, u8::to_le_bytes),
@@ -247,10 +248,10 @@ fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, ran
 		},
 		ImageData::Argb16(_, data) => write_idat_simple(&data[range], status, width, height, u16::to_le_bytes),
 		ImageData::Argb32(data) => write_idat_simple(&data[range], status, width, height, u32::to_le_bytes),
-		ImageData::Bc1(data) => write_idat_simple(&data[range], status, width / 4, height / 4, u64::to_le_bytes),
-		ImageData::Bc2(data) => write_idat_simple(&data[range], status, width / 4, height / 4, u128::to_le_bytes),
-		ImageData::Bc3(data) => write_idat_simple(&data[range], status, width / 4, height / 4, u128::to_le_bytes),
-		ImageData::Bc7(data) => write_idat_simple(&data[range], status, width / 4, height / 4, u128::to_le_bytes),
+		ImageData::Bc1(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u64::to_le_bytes),
+		ImageData::Bc2(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
+		ImageData::Bc3(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
+		ImageData::Bc7(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
 	}
 }
 
