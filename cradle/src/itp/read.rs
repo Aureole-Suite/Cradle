@@ -332,20 +332,11 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 		bail!(CcpiVersion(version));
 	}
 
-	status.compression = if flags & 0x8000 != 0 { CT::Bz_1 } else { CT::None };
-	let data = read_maybe_compressed(f, status.compression, data_size - 16)?;
+	let compression = if flags & 0x8000 != 0 { CT::Bz_1 } else { CT::None };
+	let data = read_maybe_compressed(f, compression, data_size - 16)?;
 	let f = &mut Reader::new(&data);
 
-	let pal = if flags & (1<<9) != 0 {
-		// TODO ensure palette size is 0?
-		Palette::External(f.cstr()?.to_owned()) // palette file name
-	} else {
-		let mut pal = Vec::with_capacity(pal_size);
-		for _ in 0..pal_size {
-			pal.push(f.u32()?);
-		}
-		Palette::Embedded(pal)
-	};
+	let pal = read_ipal(f, &status, flags & (1<<9) != 0, pal_size)?;
 
 	let mut pixels = vec![0; w*h];
 	for y in (0..h).step_by(ch) {
@@ -363,6 +354,8 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 		}
 	}
 	ensure_end(f)?;
+
+	status.compression = compression;
 
 	Ok(Itp {
 		status,
