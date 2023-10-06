@@ -216,7 +216,7 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 		Palette::Embedded(pal) => {
 			let mut colors = pal.to_owned();
 			if status.base_format == BFT::Indexed2 {
-				for i in 1..colors.len() {
+				for i in (1..colors.len()).rev() {
 					colors[i] = colors[i].wrapping_sub(colors[i-1])
 				}
 			}
@@ -241,7 +241,13 @@ fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, ran
 	Ok(match data {
 		ImageData::Indexed(_, data) => match status.base_format {
 			BFT::Indexed1 => write_idat_simple(&data[range], status, width, height, u8::to_le_bytes),
-			BFT::Indexed2 => bail!(Todo("can not currently write AFastMode2".to_owned())),
+			BFT::Indexed2 => {
+				let data = a_fast_mode2(data, width, height)?;
+				let mut f = Writer::new();
+				f.u32(data.len() as u32);
+				f.slice(&maybe_compress(status.compression, &data));
+				f.finish()?
+			},
 			BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
 			_ => unreachable!()
 		},
@@ -350,6 +356,48 @@ fn encode_ccpi_chunk(chunk: &[u8]) -> Vec<u8> {
 	v.extend(chunk);
 	v.extend(0..n as u8);
 	v
+}
+
+fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> {
+	fn nibbles(f: &mut Writer, data: impl IntoIterator<Item=u8>) {
+		let mut iter = data.into_iter();
+		while let (Some(a), Some(b)) = (iter.next(), iter.next()) {
+			f.u8(a << 4 | b)
+		}
+	}
+
+	let mut data = data.to_vec();
+	permute::swizzle(&mut data, height as usize, width as usize, 8, 16);
+
+	let mut colors = Vec::new();
+	let mut out = Vec::new();
+	for chunk in data.array_chunks() {
+		let mut chunk_colors = Vec::new();
+		if chunk != &[0; 8*16] {
+			for &a in chunk {
+				out.push(chunk_colors.iter().position(|i| i == &a).unwrap_or_else(|| {
+					chunk_colors.push(a);
+					chunk_colors.len() - 1
+				}) as u8);
+			}
+		}
+		if chunk_colors.len() == 1 {
+			chunk_colors.push(0);
+		}
+		if chunk_colors.len() > 16 {
+			bail!(AFastMode2)
+		}
+		colors.push(chunk_colors);
+	}
+
+	let mut f = Writer::new();
+	nibbles(&mut f, colors.iter().map(|a| a.len().saturating_sub(1) as u8));
+	for c in &colors {
+		f.slice(c);
+	}
+	f.u8(0);
+	nibbles(&mut f, out);
+	Ok(f.finish()?)
 }
 
 fn maybe_compress(compression: CT, data: &[u8]) -> Vec<u8> {

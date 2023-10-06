@@ -70,6 +70,9 @@ enum ItpError {
 	#[error("the specified format does not support external palettes")]
 	ExternalPalette,
 
+	#[error("AFastMode2 can only store 16 colors per 8×16 tile")]
+	AFastMode2,
+
 	#[error("TODO: {0}")]
 	Todo(String)
 }
