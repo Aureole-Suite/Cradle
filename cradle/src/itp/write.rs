@@ -66,8 +66,6 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 	f.label(start);
 	f.slice(b"ITP\xFF");
 
-	// IHDR IMIP IHAS IPAL IALP IDAT IEND
-
 	chunk(&mut f, b"IHDR", {
 		let mut f = Writer::new();
 		f.u32(32);
@@ -114,6 +112,17 @@ fn write_revision_3(itp: &Itp) -> Result<Writer, Error> {
 			f.u32(8);
 			f.u16(use_alpha as u16);
 			f.u16(0);
+			f
+		});
+	}
+
+	for (n, (width, height, range)) in super::mipmaps(width, height, data.pixel_count()).enumerate() {
+		chunk(&mut f, b"IDAT", {
+			let mut f = Writer::new();
+			f.u32(8);
+			f.u16(0);
+			f.u16(n as u16);
+			f.append(write_idat(status, width, height, data, range)?);
 			f
 		});
 	}
