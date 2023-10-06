@@ -1,4 +1,5 @@
 #![feature(lazy_cell)]
+#![feature(array_chunks)]
 
 use std::sync::LazyLock;
 

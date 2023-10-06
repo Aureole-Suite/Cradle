@@ -101,11 +101,11 @@ pub struct PixelFormat {
 	/// See [`DDPF`] for values.
 	pub flags: u32,
 	pub four_cc: [u8; 4],
-	pub rgb_bit_count: u32,
-	pub r_bit_mask: u32,
-	pub g_bit_mask: u32,
-	pub b_bit_mask: u32,
-	pub a_bit_mask: u32,
+	pub bpp: u32,
+	pub rmask: u32,
+	pub gmask: u32,
+	pub bmask: u32,
+	pub amask: u32,
 }
 
 impl PixelFormat {
@@ -114,11 +114,11 @@ impl PixelFormat {
 		Ok(PixelFormat {
 			flags: f.u32()?,
 			four_cc: f.array::<4>()?,
-			rgb_bit_count: f.u32()?,
-			r_bit_mask: f.u32()?,
-			g_bit_mask: f.u32()?,
-			b_bit_mask: f.u32()?,
-			a_bit_mask: f.u32()?,
+			bpp: f.u32()?,
+			rmask: f.u32()?,
+			gmask: f.u32()?,
+			bmask: f.u32()?,
+			amask: f.u32()?,
 		})
 	}
 
@@ -126,11 +126,11 @@ impl PixelFormat {
 		f.u32(32)?;
 		f.u32(self.flags)?;
 		f.write_all(&self.four_cc)?;
-		f.u32(self.rgb_bit_count)?;
-		f.u32(self.r_bit_mask)?;
-		f.u32(self.g_bit_mask)?;
-		f.u32(self.b_bit_mask)?;
-		f.u32(self.a_bit_mask)?;
+		f.u32(self.bpp)?;
+		f.u32(self.rmask)?;
+		f.u32(self.gmask)?;
+		f.u32(self.bmask)?;
+		f.u32(self.amask)?;
 		Ok(())
 	}
 }
@@ -141,11 +141,11 @@ impl Default for PixelFormat {
 		Self {
 			flags: DDPF::ALPHAPIXELS | DDPF::RGB,
 			four_cc: Default::default(),
-			rgb_bit_count: 32,
-			r_bit_mask: 0x00FF0000,
-			g_bit_mask: 0x0000FF00,
-			b_bit_mask: 0x000000FF,
-			a_bit_mask: 0xFF000000,
+			bpp: 32,
+			rmask: 0x00FF0000,
+			gmask: 0x0000FF00,
+			bmask: 0x000000FF,
+			amask: 0xFF000000,
 		}
 	}
 }
