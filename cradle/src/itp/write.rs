@@ -4,15 +4,7 @@ use gospel::write::{Writer, Le as _, Label};
 
 use crate::permute;
 
-use super::{Itp, ItpStatus, ImageData, Palette, Error, ItpError};
-use super::ItpRevision as IR;
-use super::BaseFormatType as BFT;
-use super::PixelBitFormatType as PBFT;
-use super::CompressionType as CT;
-use super::PixelFormatType as PFT;
-use super::MultiPlaneType as MPT;
-use super::MipmapType as MT;
-use super::Argb16Mode as A16;
+use super::{Itp, ItpStatus, ImageData, Palette, Error, ItpError, abbr::*};
 
 macro_rules! bail {
 	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }

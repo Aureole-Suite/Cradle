@@ -208,6 +208,17 @@ pub enum MipmapType {
 	Mipmap_2 = 2,
 }
 
+pub mod abbr {
+	pub use super::ItpRevision as IR;
+	pub use super::BaseFormatType as BFT;
+	pub use super::PixelBitFormatType as PBFT;
+	pub use super::CompressionType as CT;
+	pub use super::PixelFormatType as PFT;
+	pub use super::MultiPlaneType as MPT;
+	pub use super::MipmapType as MT;
+	pub use super::Argb16Mode as A16;
+}
+
 pub fn read(f: &[u8]) -> Result<Itp, Error> {
 	read::read(&mut Reader::new(f))
 }
