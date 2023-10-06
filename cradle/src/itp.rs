@@ -74,7 +74,7 @@ enum ItpError {
 	Todo(String)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Itp {
 	pub status: ItpStatus,
 	pub width: u32,
@@ -82,7 +82,7 @@ pub struct Itp {
 	pub data: ImageData,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ImageData {
 	Indexed(Palette, Vec<u8>),
 	Argb16(Argb16Mode, Vec<u16>),
@@ -114,7 +114,7 @@ impl std::fmt::Debug for ImageData {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Palette {
 	Embedded(Vec<u32>),
 	External(CString),
@@ -299,8 +299,14 @@ pub fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Ite
 }
 
 #[cfg(test)]
-#[filetest::filetest("../../samples/itp/*")]
+#[filetest::filetest("../../samples/itp/*.itp")]
 fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
-	read(bytes)?;
+	let mut itp = read(bytes)?;
+	if matches!(itp.status.base_format, BFT::Indexed2 | BFT::Indexed3) {
+		itp.status.base_format = BFT::Indexed1;
+	}
+	let bytes2 = write(&itp)?;
+	let itp2 = read(&bytes2)?;
+	assert_eq!(itp, itp2);
 	Ok(())
 }
