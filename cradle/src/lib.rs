@@ -3,4 +3,5 @@
 #![feature(never_type)]
 
 pub mod itp;
+pub mod itc;
 pub mod permute;
