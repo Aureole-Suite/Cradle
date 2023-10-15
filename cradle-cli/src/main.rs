@@ -54,7 +54,7 @@ struct Args {
 impl Cli {
 	fn output(&self, path: &Utf8Path, ext: &str) -> eyre::Result<Utf8PathBuf> {
 		let dir = if let Some(output) = self.output.as_ref() {
-			if self.file.len() == 1 {
+			if self.file.len() == 1 && !output.as_str().ends_with(std::path::is_separator) {
 				if let Some(parent) = output.parent() {
 					std::fs::create_dir_all(parent)?;
 				}
