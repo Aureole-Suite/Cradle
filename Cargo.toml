@@ -6,3 +6,13 @@ members = [
 	"cradle-cli",
 ]
 resolver = "2"
+
+[profile.dev]
+package.falcompress.opt-level = 3
+package.png.opt-level = 3
+package.crc32fast.opt-level = 3
+package.simd-adler32.opt-level = 3
+package.flate2.opt-level = 3
+package.adler.opt-level = 3
+package.miniz_oxide.opt-level = 3
+package.strength_reduce.opt-level = 3
