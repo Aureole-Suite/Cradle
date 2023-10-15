@@ -1,5 +1,3 @@
-#![allow(non_camel_case_types)]
-
 use std::ffi::CString;
 use num_enum::TryFromPrimitive;
 use gospel::read::Reader;
@@ -177,6 +175,7 @@ pub enum PixelBitFormatType {
 	Compressed = 6,
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
 pub enum PixelFormatType {
@@ -188,6 +187,7 @@ pub enum PixelFormatType {
 	Pfp_4 = 4, // aka Tile or PS4Tile
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
 pub enum CompressionType {
@@ -205,6 +205,7 @@ pub enum MultiPlaneType {
 	None = 0,
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
 #[repr(u16)]
 pub enum MipmapType {
