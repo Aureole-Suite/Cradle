@@ -58,6 +58,9 @@ enum ItpError {
 	#[error("base and pixel format mismatch: {bft:?} cannot use {pbft:?}")]
 	PixelFormat { bft: BaseFormatType, pbft: PixelBitFormatType },
 
+	#[error("external palette must have size 0")]
+	ExternalPaletteMustBe0,
+
 	#[error("got a palette on a non-indexed format")]
 	PalettePresent,
 

@@ -230,7 +230,10 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 
 fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
 	if is_external {
-		bail!(Todo(String::from("External IPAL")));
+		if size != 0 {
+			bail!(ExternalPaletteMustBe0)
+		}
+		Ok(Palette::External(f.cstr()?.to_owned()))
 	} else {
 		let data = read_maybe_compressed(f, status.compression, size * 4)?;
 
