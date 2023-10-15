@@ -7,7 +7,7 @@ use rayon::prelude::*;
 fn main() -> anyhow::Result<()> {
 	run_everything(".itp", |dat| match cradle::itp::read(dat) {
 		Ok(_) => Ok(()),
-		Err(cradle::itp::Error::NotItp) => Ok(()),
+		Err(cradle::itp::ReadError::NotItp) => Ok(()),
 		Err(e) => Err(e.into())
 	})?;
 	Ok(())

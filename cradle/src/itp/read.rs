@@ -1,13 +1,88 @@
 use falcompress::freadp::freadp;
 use gospel::read::{Reader, Le as _};
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
+use snafu::prelude::*;
 
 use crate::permute;
 
-use super::{Itp, ItpStatus, ImageData, Palette, Error, ItpError, abbr::*};
+use super::{Itp, ItpStatus, ImageData, Palette, abbr::*};
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+	#[snafu(display("this is not an itp file"))]
+	NotItp,
+
+	#[allow(private_interfaces)]
+	#[snafu(context(false))]
+	Invalid { source: InnerError, backtrace: std::backtrace::Backtrace },
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(module(e), context(suffix(false)))]
+enum InnerError {
+	#[snafu(context(false))]
+	Read { source: gospel::read::Error },
+
+	#[snafu(context(false))]
+	Compress { source: falcompress::Error },
+
+	#[snafu(display("gen2 missing flag for {what}"))]
+	MissingFlag { what: &'static str },
+
+	#[snafu(display("gen2 extra flags: {flags:08X}"))]
+	ExtraFlags { flags: u32 },
+
+	#[snafu(display("bad itp chunk '{}'", super::show_fourcc(*fourcc)))]
+	BadChunk { fourcc: [u8; 4] },
+
+	#[snafu(display("invalid value for {field}: {value}"))]
+	Invalid { field: &'static str, value: u32 },
+
+	#[snafu(display("unexpected size: expected {expected}, but got {value}"))]
+	WrongSize { expected: usize, value: usize },
+
+	#[snafu(display("wrong number of mipmaps: header says {expected}, but there are {value}"))]
+	WrongMips { expected: usize, value: usize },
+
+	#[snafu(display("unexpected data after end"))]
+	RemainingData,
+
+	#[snafu(display("invalid ccpi version {version}"))]
+	CcpiVersion { version: u16 },
+
+	#[snafu(display("missing IHDR chunk"))]
+	NoHeader,
+
+	#[snafu(display("base and pixel format mismatch: {bft:?} cannot use {pbft:?}"))]
+	PixelFormat { bft: BFT, pbft: PBFT },
+
+	#[snafu(display("external palette must have size 0"))]
+	ExternalPaletteMustBe0,
+
+	#[snafu(display("got a palette on a non-indexed format"))]
+	PalettePresent,
+
+	#[snafu(display("no palette is present for indexed format"))]
+	PaletteMissing,
+
+	#[snafu(display("{what} is not yet implemented"))]
+	Todo { what: String }
+}
+
+impl From<gospel::read::Error> for Error {
+	fn from(source: gospel::read::Error) -> Self {
+		InnerError::from(source).into()
+	}
+}
+
+impl From<falcompress::Error> for Error {
+	fn from(source: falcompress::Error) -> Self {
+		InnerError::from(source).into()
+	}
+}
 
 macro_rules! bail {
-	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
+	($e:expr) => { $e.fail::<!>()? }
 }
 
 pub fn read(f: &mut Reader) -> Result<Itp, Error> {
@@ -17,7 +92,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 
 	let head = f.u32()?;
 	let flags = match head {
-		PNG | DDS => return Err(Error::NotItp),
+		PNG | DDS => bail!(NotItpSnafu),
 		ITP => {
 			f.seek(f.pos() - 4)?;
 			return read_revision_3(f);
@@ -118,38 +193,35 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				f.check_u32(8)?;
 				f.check_u16(0)?;
 				f.check_u16(current_mip as u16)?;
-				let Some(data) = &mut data else {
-					bail!(NoHeader)
-				};
+				let data = data.as_mut().context(e::NoHeader)?;
 				read_idat(f, &status, data, width >> current_mip, height >> current_mip)?;
 				current_mip += 1;
 			}
 
-			b"IEXT" => bail!(Todo("IEXT chunk".into())),
+			b"IEXT" => bail!(e::Todo { what: "IEXT chunk" }),
 
 			b"IEND" => break,
-			_ => bail!(BadChunk { fourcc })
+			_ => bail!(e::BadChunk { fourcc })
 		}
 	}
 
-	let Some(mut data) = data else {
-		bail!(NoHeader)
-	};
+	let mut data = data.context(e::NoHeader)?;
 
 	if let Some(palette) = pal {
 		let ImageData::Indexed(pal, _) = &mut data else {
-			bail!(PalettePresent);
+			bail!(e::PalettePresent)
 		};
 		*pal = palette;
-	} else if let ImageData::Indexed(..) = data {
-		bail!(PaletteMissing);
+	} else {
+		#[allow(clippy::collapsible_else_if)]
+		if let ImageData::Indexed(..) = data {
+			bail!(e::PaletteMissing)
+		}
 	}
+
 
 	ensure_size(f.pos() - start, file_size)?;
-
-	if n_mip != current_mip {
-		bail!(WrongMips { expected: n_mip, value: current_mip });
-	}
+	ensure!(n_mip == current_mip, e::WrongMips { expected: n_mip, value: current_mip });
 
 	Ok(Itp { status, width, height, data })
 }
@@ -171,7 +243,7 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 			20 => (BFT::Indexed1, PBFT::Indexed),
 			21 => (BFT::Indexed2, PBFT::Indexed),
 			22 => (BFT::Indexed3, PBFT::Indexed),
-			_ => bail!(MissingFlag("indexed type"))
+			_ => bail!(e::MissingFlag { what: "indexed type" })
 		},
 		3 => (BFT::Argb16, PBFT::Argb16_1),
 		1 => (BFT::Argb16, PBFT::Argb16_2),
@@ -180,7 +252,7 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 		24 => (BFT::Bc1, PBFT::Compressed),
 		25 => (BFT::Bc2, PBFT::Compressed),
 		26 => (BFT::Bc3, PBFT::Compressed),
-		_ => bail!(MissingFlag("base format type"))
+		_ => bail!(e::MissingFlag { what: "base format type" })
 	};
 
 	let compression = bits! {
@@ -198,7 +270,7 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 		12 => PFT::Pfp_2,
 		13 => PFT::Pfp_3,
 		14 => PFT::Pfp_4,
-		_ => bail!(MissingFlag("pixel format"))
+		_ => bail!(e::MissingFlag { what: "pixel format" })
 	};
 
 	let multi_plane = MPT::None;
@@ -212,9 +284,7 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 	};
 
 	let unused: u32 = [5, 6, 7, 8, 9, 18, 19, 23, 27, 31].iter().map(|a| 1 << *a).sum();
-	if f & unused != 0 {
-		bail!(ExtraFlags(f & unused))
-	}
+	ensure!(f & unused == 0, e::ExtraFlags { flags: f & unused });
 
 	Ok(ItpStatus {
 		itp_revision,
@@ -230,9 +300,7 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 
 fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
 	if is_external {
-		if size != 0 {
-			bail!(ExternalPaletteMustBe0)
-		}
+		ensure!(size == 0, e::ExternalPaletteMustBe0);
 		Ok(Palette::External(f.cstr()?.to_owned()))
 	} else {
 		let data = read_maybe_compressed(f, status.compression, size * 4)?;
@@ -264,7 +332,7 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: u3
 				ensure_end(g)?;
 				data
 			}),
-			BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
+			BFT::Indexed3 => bail!(e::Todo { what: "CCPI is not supported for revision 3" }),
 			_ => unreachable!()
 		},
 		ImageData::Argb16(_, data) => data.extend(read_idat_simple(f, status, width, height, u16::from_le_bytes)?),
@@ -315,7 +383,7 @@ fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
 		(BFT::Bc2, PBFT::Compressed) => ImageData::Bc2(Vec::new()),
 		(BFT::Bc3, PBFT::Compressed) => ImageData::Bc3(Vec::new()),
 		(BFT::Bc7, PBFT::Compressed) => ImageData::Bc7(Vec::new()),
-		(bft, pbft) => bail!(PixelFormat { bft, pbft }),
+		(bft, pbft) => bail!(e::PixelFormat { bft, pbft }),
 	})
 }
 
@@ -331,9 +399,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 	let h = f.u16()? as usize;
 	let flags = f.u16()?;
 
-	if !matches!(version, 6 | 7) {
-		bail!(CcpiVersion(version));
-	}
+	ensure!(matches!(version, 6 | 7), e::CcpiVersion { version });
 
 	let compression = if flags & (1<<15) != 0 { CT::Bz_1 } else { CT::None };
 	let data = read_maybe_compressed(f, compression, data_size - 16)?;
@@ -436,7 +502,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 					nibbles(f, &mut chunk)?;
 					chunk = chunk.map(|a| colors[a as usize]);
 				}
-				1 => bail!(Todo("obscure AFastMode2 subformat".into())),
+				1 => bail!(e::Todo { what: "obscure AFastMode2 subformat" }),
 				_ => {
 					match f.u8()? {
 						1 => {
@@ -456,7 +522,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 								}
 							}
 						}
-						n => bail!(Todo(format!("obscure AFastMode2 subformat {n}")))
+						n => bail!(e::Todo { what: format!("obscure AFastMode2 subformat {n}") })
 					}
 				}
 			}
@@ -491,33 +557,29 @@ fn freadp_multi(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 }
 
 fn ensure_end(f: &Reader) -> Result<(), Error> {
-	if f.remaining().is_empty() {
-		Ok(())
-	} else {
-		bail!(RemainingData)
-	}
+	ensure!(f.remaining().is_empty(), e::RemainingData);
+	Ok(())
 }
 
 fn ensure_size(value: usize, expected: usize) -> Result<(), Error> {
-	if value == expected {
-		Ok(())
-	} else {
-		bail!(WrongSize { value, expected })
-	}
+	ensure!(value == expected, e::WrongSize { value, expected });
+	Ok(())
 }
 
 #[extend::ext(name = ReaderExt2)]
 pub impl Reader<'_> {
-	fn enum16<T: TryFromPrimitive<Primitive=u16,Error=TryFromPrimitiveError<T>>>(&mut self, field: &'static str) -> Result<T, Error> {
-		T::try_from_primitive(self.u16()?)
-			.map_err(|e| ItpError::Invalid { field, value: e.number as u32 }.into())
+	fn enum16<T>(&mut self, field: &'static str) -> Result<T, Error> where
+		T: TryFromPrimitive<Primitive=u16, Error=TryFromPrimitiveError<T>>,
+	{
+		Ok(T::try_from_primitive(self.u16()?)
+			.map_err(|e| e::Invalid { field, value: e.number }.build())?)
 	}
 
 	fn bool16(&mut self, field: &'static str) -> Result<bool, Error> {
 		match self.u16()? {
 			0 => Ok(false),
 			1 => Ok(true),
-			v => Err(ItpError::Invalid { field, value: v as u32 }.into())
+			v => bail!(e::Invalid { field, value: v })
 		}
 	}
 }
