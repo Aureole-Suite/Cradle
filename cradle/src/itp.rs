@@ -5,78 +5,8 @@ use gospel::read::Reader;
 mod read;
 mod write;
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	#[error("{source}")]
-	Read { #[from] source: gospel::read::Error, backtrace: std::backtrace::Backtrace },
-
-	#[error("{source}")]
-	Write { #[from] source: gospel::write::Error, backtrace: std::backtrace::Backtrace },
-
-	#[error("{source}")]
-	Compression { #[from] source: falcompress::Error, backtrace: std::backtrace::Backtrace },
-
-	#[error("this is not an itp file")]
-	NotItp,
-
-	#[error("{source}")]
-	#[allow(private_interfaces)]
-	Itp { #[from] source: ItpError, backtrace: std::backtrace::Backtrace },
-}
-
-#[derive(Debug, thiserror::Error)]
-enum ItpError {
-	#[error("gen2 flags missing for {0}")]
-	MissingFlag(&'static str),
-
-	#[error("gen2 extra flags: {0:08X}")]
-	ExtraFlags(u32),
-
-	#[error("bad itp chunk '{}'", show_fourcc(*fourcc))]
-	BadChunk { fourcc: [u8; 4] },
-
-	#[error("invalid value for {field}: {value}")]
-	Invalid { field: &'static str, value: u32 },
-
-	#[error("unexpected size: expected {expected}, but got {value}")]
-	WrongSize { expected: usize, value: usize },
-
-	#[error("wrong number of mipmaps: header says {expected}, but there are {value}")]
-	WrongMips { expected: usize, value: usize },
-
-	#[error("unexpected data after end")]
-	RemainingData,
-
-	#[error("ccpi only supports versions 6 and 7, got {0}")]
-	CcpiVersion(u16),
-
-	#[error("missing IHDR chunk")]
-	NoHeader,
-
-	#[error("base and pixel format mismatch: {bft:?} cannot use {pbft:?}")]
-	PixelFormat { bft: BaseFormatType, pbft: PixelBitFormatType },
-
-	#[error("external palette must have size 0")]
-	ExternalPaletteMustBe0,
-
-	#[error("got a palette on a non-indexed format")]
-	PalettePresent,
-
-	#[error("no palette is present for indexed format")]
-	PaletteMissing,
-
-	#[error("the specified revision cannot represent this file")]
-	Unrepresentable,
-
-	#[error("the specified format does not support external palettes")]
-	ExternalPalette,
-
-	#[error("AFastMode2 can only store 16 colors per 8×16 tile")]
-	AFastMode2,
-
-	#[error("TODO: {0}")]
-	Todo(String)
-}
+pub use read::Error as ReadError;
+pub use write::Error as WriteError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Itp {
@@ -228,15 +158,11 @@ pub mod abbr {
 
 use abbr::*;
 
-pub fn read(f: &[u8]) -> Result<Itp, Error> {
-	read_from(&mut Reader::new(f))
+pub fn read(f: &[u8]) -> Result<Itp, read::Error> {
+	read::read(&mut Reader::new(f))
 }
 
-pub fn read_from(f: &mut Reader) -> Result<Itp, Error> {
-	read::read(f)
-}
-
-pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
+pub fn write(itp: &Itp) -> Result<Vec<u8>, write::Error> {
 	write::write(itp)
 }
 

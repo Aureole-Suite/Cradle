@@ -1,13 +1,50 @@
-#![warn(clippy::todo)]
-
 use gospel::write::{Writer, Le as _, Label};
+use snafu::prelude::*;
 
 use crate::permute;
 
-use super::{Itp, ItpStatus, ImageData, Palette, Error, ItpError, abbr::*};
+use super::{Itp, ItpStatus, ImageData, Palette, abbr::*};
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+	#[allow(private_interfaces)]
+	#[snafu(context(false))]
+	Invalid { source: InnerError, backtrace: std::backtrace::Backtrace },
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(module(e), context(suffix(false)))]
+enum InnerError {
+	#[snafu(context(false))]
+	Write { source: gospel::write::Error },
+
+	#[snafu(display("the specified revision cannot represent this file"))]
+	Unrepresentable,
+
+	#[snafu(display("the specified format does not support external palettes"))]
+	ExternalPalette,
+
+	#[snafu(display("CCPI can only store indexed images"))]
+	CcpiMustBeIndexed,
+
+	#[snafu(display("CCPI only supports Bz_1 compression or none"))]
+	CcpiCompression,
+
+	#[snafu(display("AFastMode2 can only store 16 colors per 8×16 tile"))]
+	AFastMode2Colors,
+
+	#[snafu(display("{what} is not yet implemented"))]
+	Todo { what: String }
+}
+
+impl From<gospel::write::Error> for Error {
+	fn from(source: gospel::write::Error) -> Self {
+		InnerError::from(source).into()
+	}
+}
 
 macro_rules! bail {
-	($e:expr) => { { use ItpError::*; Err($e)?; unreachable!() } }
+	($e:expr) => { $e.fail::<!>()? }
 }
 
 pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
@@ -18,7 +55,7 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 		IR::V2 => status_to_flags(status),
 		IR::V3 => return write_revision_3(itp),
 	}) else {
-		bail!(Unrepresentable);
+		bail!(e::Unrepresentable);
 	};
 
 	let mut f = Writer::new();
@@ -33,9 +70,7 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 		if let ImageData::Indexed(pal, _) = data {
 			let fixed_size = matches!(head, 1000 | 1002);
 			let (is_external, pal_size, pal) = write_ipal(status, pal, fixed_size)?;
-			if is_external {
-				bail!(ExternalPalette)
-			}
+			ensure!(!is_external, e::ExternalPalette);
 			if !fixed_size {
 				f.u32(pal_size as u32);
 			};
@@ -250,7 +285,7 @@ fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, ran
 				f.slice(&maybe_compress(status.compression, &data));
 				f.finish()?
 			},
-			BFT::Indexed3 => bail!(Todo("CCPI is not supported for revision 3".to_owned())),
+			BFT::Indexed3 => bail!(e::Todo { what: "CCPI is not supported for revision 3" }),
 			_ => unreachable!()
 		},
 		ImageData::Argb16(_, data) => write_idat_simple(&data[range], status, width, height, u16::to_le_bytes),
@@ -290,7 +325,7 @@ fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT)
 
 fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	let ImageData::Indexed(pal, pixels) = &itp.data else {
-		bail!(Unrepresentable)
+		bail!(e::CcpiMustBeIndexed)
 	};
 
 	let mut status_copy = itp.status.clone();
@@ -306,8 +341,7 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	match itp.status.compression {
 		CT::None => {},
 		CT::Bz_1 => flags |= 1 << 15,
-		CT::Bz_2 => bail!(Unrepresentable),
-		CT::C77 => bail!(Unrepresentable),
+		CT::Bz_2 | CT::C77 => bail!(e::CcpiCompression),
 	}
 
 	g.slice(&pal);
@@ -387,7 +421,7 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 			chunk_colors.push(0);
 		}
 		if chunk_colors.len() > 16 {
-			bail!(AFastMode2)
+			bail!(e::AFastMode2Colors)
 		}
 		colors.push(chunk_colors);
 	}
