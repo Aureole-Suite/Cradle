@@ -232,7 +232,9 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 
 			Ok((false, pal.len(), maybe_compress(status.compression, &f.finish()?)))
 		},
-		Palette::External(_) => bail!(Todo(String::from("external IPAL"))),
+		Palette::External(path) => {
+			Ok((true, 0, path.to_bytes_with_nul().to_owned()))
+		},
 	}
 }
 
