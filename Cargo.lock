@@ -188,7 +188,6 @@ dependencies = [
  "indicatif",
  "memmap2",
  "num_enum",
- "png",
  "rayon",
  "thiserror",
 ]
