@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
 	run_everything(".itc", |dat| {
 		let itc = cradle::itc::read(dat)?;
 		let dat2 = cradle::itc::write(&itc)?;
-		assert!(dat == dat2 || dat[..dat.len()-1] == dat2 || dat[..dat.len()-2] == dat2); // Damn geofront
+		assert!(dat == dat2 || dat[..dat.len() - 1] == dat2 || dat[..dat.len() - 2] == dat2); // Damn geofront
 		Ok(())
 	})?;
 	Ok(())

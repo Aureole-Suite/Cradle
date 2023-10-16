@@ -9,7 +9,7 @@ cradle-dds.path = "../cradle-dds"
 cradle-dxt.path = "../cradle-dxt"
 
 clap = { version = "4.2", features = ["derive"] }
-camino = "1.1.6"
+camino = { version = "1.1.6", features = ["serde1"] }
 
 eyre = "0.6.8"
 eyre-span = "0.1"
@@ -20,6 +20,10 @@ tracing-error = "0.2.0"
 png = "0.17.7"
 strength_reduce = "0.2.4"
 strict_result = "1.1.0"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.95"
+derive_more = "0.99.17"
 
 [dev-dependencies]
 filetest = "0.1.1"

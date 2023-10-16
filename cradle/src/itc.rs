@@ -1,5 +1,5 @@
-use gospel::read::{Reader, Le as _};
-use gospel::write::{Writer, Le as _};
+use gospel::read::{Le as _, Reader};
+use gospel::write::{Le as _, Writer};
 use snafu::prelude::*;
 
 #[derive(Debug, Snafu)]
@@ -9,7 +9,10 @@ pub enum ReadError {
 
 	#[allow(private_interfaces)]
 	#[snafu(context(false))]
-	Invalid { source: InnerReadError, backtrace: std::backtrace::Backtrace },
+	Invalid {
+		source: InnerReadError,
+		backtrace: std::backtrace::Backtrace,
+	},
 }
 
 #[derive(Debug, Snafu)]
@@ -38,7 +41,10 @@ impl From<falcompress::Error> for ReadError {
 pub enum WriteError {
 	#[allow(private_interfaces)]
 	#[snafu(context(false))]
-	Invalid { source: InnerWriteError, backtrace: std::backtrace::Backtrace },
+	Invalid {
+		source: InnerWriteError,
+		backtrace: std::backtrace::Backtrace,
+	},
 }
 
 #[derive(Debug, Snafu)]
@@ -55,7 +61,9 @@ impl From<gospel::write::Error> for WriteError {
 }
 
 macro_rules! bail {
-	($e:expr) => { $e.fail::<!>()? }
+	($e:expr) => {
+		$e.fail::<!>()?
+	};
 }
 
 #[derive(Clone, PartialEq)]
@@ -140,14 +148,26 @@ pub fn read(data: &[u8]) -> Result<Itc, ReadError> {
 	let mut starts = frames.iter().map(|a| a.order).collect::<Vec<_>>();
 	starts.sort();
 	for frame in &mut frames {
-		frame.order = starts.binary_search(&frame.order).unwrap();
+		if frame.itp.is_some() {
+			frame.order = starts.binary_search(&frame.order).unwrap();
+		}
 	}
 
-	for k in &mut frames { k.unknown  = f.u16()?; }
-	for k in &mut frames { k.offset.0 = f.f32()?; }
-	for k in &mut frames { k.offset.1 = f.f32()?; }
-	for k in &mut frames { k.scale.0  = f.f32()?; }
-	for k in &mut frames { k.scale.1  = f.f32()?; }
+	for k in &mut frames {
+		k.unknown = f.u16()?;
+	}
+	for k in &mut frames {
+		k.offset.0 = f.f32()?;
+	}
+	for k in &mut frames {
+		k.offset.1 = f.f32()?;
+	}
+	for k in &mut frames {
+		k.scale.0 = f.f32()?;
+	}
+	for k in &mut frames {
+		k.scale.1 = f.f32()?;
+	}
 
 	let palette = if has_palette {
 		let pal_size = f.u32()? as usize;
@@ -160,10 +180,7 @@ pub fn read(data: &[u8]) -> Result<Itc, ReadError> {
 		None
 	};
 
-	Ok(Itc {
-		frames,
-		palette,
-	})
+	Ok(Itc { frames, palette })
 }
 
 pub fn write(itc: &Itc) -> Result<Vec<u8>, WriteError> {

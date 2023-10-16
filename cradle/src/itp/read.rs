@@ -90,11 +90,11 @@ macro_rules! bail {
 	};
 }
 
-pub fn read(f: &mut Reader) -> Result<Itp, Error> {
-	const ITP: u32 = u32::from_le_bytes(*b"ITP\xFF");
-	const PNG: u32 = u32::from_le_bytes(*b"\x89PNG");
-	const DDS: u32 = u32::from_le_bytes(*b"DDS ");
+const ITP: u32 = u32::from_le_bytes(*b"ITP\xFF");
+const PNG: u32 = u32::from_le_bytes(*b"\x89PNG");
+const DDS: u32 = u32::from_le_bytes(*b"DDS ");
 
+pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	let head = f.u32()?;
 	let flags = match head {
 		PNG | DDS => bail!(NotItpSnafu),
@@ -144,6 +144,42 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 		height,
 		data,
 	})
+}
+
+pub fn read_size(f: &mut Reader) -> Result<(u32, u32), Error> {
+	let head = f.u32()?;
+	let flags = match head {
+		PNG | DDS => bail!(NotItpSnafu),
+		ITP => loop {
+			let fourcc = f.array::<4>()?;
+			let _size = f.u32()? as usize;
+			if fourcc == *b"IHDR" {
+				f.check_u32(32)?;
+				return Ok((f.u32()?, f.u32()?));
+			}
+		},
+		#[rustfmt::skip]
+		999  => 0x108802, // Argb16_2, None, Linear
+		1000 => 0x108801, // Indexed1, None, Linear
+		1001 => 0x110802, // Argb16_2, Bz_1, Linear
+		1002 => 0x110801, // Indexed1, Bz_1, Linear
+		1003 => 0x110402, // Argb16_2, Bz_1, Pfp_1
+		1004 => 0x110401, // Indexed1, Bz_1, Pfp_1
+		1005 => 0x210401, // Indexed2, Bz_1, Pfp_1
+		1006 => 0x400401, // Indexed3, Ccpi, Pfp_1
+		x if x & 0x40000000 != 0 => x,
+		_ => return Err(Error::NotItp),
+	};
+	let status = status_from_flags(flags)?;
+
+	if status.base_format == BFT::Indexed3 {
+		f.u32()?;
+		f.check(b"CCPI")?;
+		f.slice(6)?;
+		Ok((f.u16()? as u32, f.u16()? as u32))
+	} else {
+		Ok((f.u32()?, f.u32()?))
+	}
 }
 
 fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {

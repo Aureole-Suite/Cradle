@@ -2,6 +2,6 @@
 #![feature(array_chunks)]
 #![feature(never_type)]
 
-pub mod itp;
 pub mod itc;
+pub mod itp;
 pub mod permute;

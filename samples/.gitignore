@@ -1,3 +1,4 @@
 /**/*.png
 /**/*.dds
 /itc/**/*.itp
+/itc/**/*.json

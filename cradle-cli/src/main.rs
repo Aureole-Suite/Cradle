@@ -6,6 +6,7 @@ use clap::ValueHint;
 use eyre_span::emit;
 use strict_result::*;
 
+mod itc;
 mod itp_dds;
 mod itp_png;
 mod png;
@@ -32,6 +33,17 @@ struct Args {
 	#[clap(long)]
 	dds: bool,
 
+	/// When extracting itc, do not convert the individual images
+	#[clap(long)]
+	itp: bool,
+
+	/// When extracting itc, do not create a subdirectory
+	///
+	/// Normally the converted files will be placed at ch00000/index.json and ch00000/0.png,
+	/// with this flag they are instead placed at ch00000.json and ch00000.0.png.
+	#[clap(long)]
+	no_dir: bool,
+
 	/// Do not read or write indexed images from png files
 	#[clap(long)]
 	png_no_palette: bool,
@@ -57,6 +69,28 @@ struct Args {
 impl Cli {
 	fn output<'a>(&'a self, path: &'a Utf8Path) -> eyre::Result<util::Output> {
 		util::Output::from_output_flag(self.output.as_deref(), path, self.file.len())
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, derive_more::From)]
+#[serde(tag = "type")]
+enum Spec {
+	Itc(itc::ItcSpec),
+}
+
+impl Spec {
+	fn write(
+		path: impl AsRef<Utf8Path>,
+		formatter: impl serde_json::ser::Formatter,
+		data: impl Into<Spec>,
+	) -> eyre::Result<()> {
+		use serde::Serialize;
+		let mut ser = serde_json::Serializer::with_formatter(
+			std::fs::File::create(path.as_ref())?,
+			formatter,
+		);
+		data.into().serialize(&mut ser)?;
+		Ok(())
 	}
 }
 
@@ -101,6 +135,15 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			let data = to_itp(args, file)?;
 			let output = output.with_extension("itp");
 			std::fs::write(&output, data)?;
+			tracing::info!("wrote to {output}");
+		}
+
+		"itc" => {
+			let data = std::fs::read(file)?;
+			let itc = tracing::info_span!("parse_itc")
+				.in_scope(|| Ok(cradle::itc::read(&data)?))
+				.strict()?;
+			let output = crate::itc::extract(args, &itc, output)?;
 			tracing::info!("wrote to {output}");
 		}
 
