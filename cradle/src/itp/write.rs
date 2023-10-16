@@ -308,23 +308,23 @@ fn write_idat_simple<T: Clone, const N: usize>(
 	height: u32,
 	to_le_bytes: fn(T) -> [u8; N],
 ) -> Vec<u8> {
-	let mut data = data.to_vec();
-	do_swizzle(&mut data, width as usize, height as usize, status.pixel_format);
+	let data = do_swizzle(data.to_vec(), width as usize, height as usize, status.pixel_format);
 	let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
 	maybe_compress(status.compression, &data)
 }
 
-fn do_swizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT) {
+fn do_swizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
 	match pixel_format {
 		PFT::Linear => {},
-		PFT::Pfp_1 => permute::swizzle(data, height, width, 8, 16),
-		PFT::Pfp_2 => permute::swizzle(data, height, width, 32, 32),
-		PFT::Pfp_3 => permute::morton(data, height, width),
+		PFT::Pfp_1 => permute::swizzle(&mut data, height, width, 8, 16),
+		PFT::Pfp_2 => permute::swizzle(&mut data, height, width, 32, 32),
+		PFT::Pfp_3 => permute::morton(&mut data, height, width),
 		PFT::Pfp_4 => {
-			permute::swizzle(data, height, width, 8, 1);
-			permute::morton(data, width*height/8, 8);
+			permute::swizzle(&mut data, height, width, 8, 1);
+			permute::morton(&mut data, width*height/8, 8);
 		}
 	}
+	data
 }
 
 fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
@@ -406,8 +406,7 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 		}
 	}
 
-	let mut data = data.to_vec();
-	do_swizzle(&mut data, width as usize, height as usize, PFT::Pfp_1);
+	let data = do_swizzle(data.to_vec(), width as usize, height as usize, PFT::Pfp_1);
 
 	let mut colors = Vec::new();
 	let mut out = Vec::new();
