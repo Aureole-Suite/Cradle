@@ -135,7 +135,7 @@ pub fn png_to_itp(args: &Args, f: impl Read) -> eyre::Result<Itp> {
 
 	let pal = png.info().palette.as_ref().map(|pal| {
 		let mut pal = pal.array_chunks()
-			.map(|&[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))
+			.map(|&[r, g, b]| u32::from_le_bytes([r, g, b, 0xFF]))
 			.collect::<Vec<_>>();
 		if let Some(trns) = &png.info().trns {
 			for (rgb, a) in pal.iter_mut().zip(trns.iter()) {

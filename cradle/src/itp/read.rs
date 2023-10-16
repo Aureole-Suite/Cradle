@@ -316,6 +316,10 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 				colors[i] = colors[i].wrapping_add(colors[i-1])
 			}
 		}
+		for c in &mut colors {
+			let [r, g, b, a] = u32::to_le_bytes(*c);
+			*c = u32::from_le_bytes([b, g, r, a]);
+		}
 		Ok(Palette::Embedded(colors))
 	}
 }
