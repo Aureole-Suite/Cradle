@@ -135,9 +135,10 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 		}
 		"png" => {
 			let data = std::fs::File::open(file)?;
-			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
-				itp_png::png_to_itp(args, &data).map_err(eyre::Report::from)
+			let png = tracing::info_span!("parse_png").in_scope(|| {
+				itp_png::read_png(args, &data).map_err(eyre::Report::from)
 			})?;
+			let mut itp = itp_png::png_to_itp(args, &png)?;
 			guess_itp_revision(args, &mut itp);
 			let output = cli.output(file, "itp")?;
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;

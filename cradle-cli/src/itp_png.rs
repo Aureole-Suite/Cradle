@@ -128,7 +128,20 @@ pub fn write_png(
 	Ok(())
 }
 
-pub fn png_to_itp(args: &Args, f: impl Read) -> eyre::Result<Itp> {
+pub fn png_to_itp(args: &Args, png: &Png) -> eyre::Result<Itp> {
+	let Png { width, height, ref data } = *png;
+	let data = match data {
+		PngImageData::Argb32(data) =>
+			ImageData::Argb32(data.clone()),
+		PngImageData::Indexed(pal, data) if args.png_no_palette =>
+			ImageData::Argb32(data.iter().map(|i| *pal.get(*i as usize).unwrap_or(&0)).collect()),
+		PngImageData::Indexed(pal, data) =>
+			ImageData::Indexed(Palette::Embedded(pal.clone()), data.clone())
+	};
+	Ok(Itp::new(cradle::itp::ItpRevision::V3, width, height, data))
+}
+
+pub fn read_png(args: &Args, f: impl Read) -> eyre::Result<Png> {
 	let png = png::Decoder::new(f).read_info()?;
 	eyre::ensure!(png.info().bit_depth == png::BitDepth::Eight, "only 8-bit png is supported");
 
@@ -147,22 +160,22 @@ pub fn png_to_itp(args: &Args, f: impl Read) -> eyre::Result<Itp> {
 		pal
 	});
 
-	let imgdata = match png.info().color_type {
+	let data = match png.info().color_type {
 		png::ColorType::Indexed if !args.png_no_palette =>
-			ImageData::Indexed(Palette::Embedded(pal.unwrap()), read_frames(args, png, |[a]| a)?),
+			PngImageData::Indexed(pal.unwrap(), read_frames(args, png, |[a]| a)?),
 		png::ColorType::Indexed =>
-			ImageData::Argb32(read_frames(args, png, |[i]| *pal.as_ref().unwrap().get(i as usize).unwrap_or(&0))?),
+			PngImageData::Argb32(read_frames(args, png, |[i]| *pal.as_ref().unwrap().get(i as usize).unwrap_or(&0))?),
 		png::ColorType::Grayscale =>
-			ImageData::Argb32(read_frames(args, png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?),
+			PngImageData::Argb32(read_frames(args, png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?),
 		png::ColorType::GrayscaleAlpha =>
-			ImageData::Argb32(read_frames(args, png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?),
+			PngImageData::Argb32(read_frames(args, png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?),
 		png::ColorType::Rgb =>
-			ImageData::Argb32(read_frames(args, png, |[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))?),
+			PngImageData::Argb32(read_frames(args, png, |[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))?),
 		png::ColorType::Rgba =>
-			ImageData::Argb32(read_frames(args, png, |[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))?),
+			PngImageData::Argb32(read_frames(args, png, |[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))?),
 	};
 
-	Ok(Itp::new(cradle::itp::ItpRevision::V3, width, height, imgdata))
+	Ok(Png { width, height, data })
 }
 
 fn read_frames<R: Read, T, const N: usize>(
@@ -196,11 +209,14 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
 	let args = &Args::default();
 	use std::io::Cursor;
 	let itp = cradle::itp::read(bytes)?;
+	let png = itp_to_png(args, &itp)?;
+	let itp2 = png_to_itp(args, &png)?;
+	let png2 = itp_to_png(args, &itp2)?;
+	assert_eq!(png, png2);
+
 	let mut png_data = Vec::new();
-	write_png(args, Cursor::new(&mut png_data), &itp_to_png(args, &itp)?)?;
-	let itp2 = png_to_itp(args, Cursor::new(&png_data))?;
-	let mut png_data2 = Vec::new();
-	write_png(args, Cursor::new(&mut png_data2), &itp_to_png(args, &itp2)?)?;
-	assert!(png_data == png_data2);
+	write_png(args, Cursor::new(&mut png_data), &png)?;
+	let png2 = read_png(args, Cursor::new(&png_data))?;
+	assert_eq!(png, png2);
 	Ok(())
 }
