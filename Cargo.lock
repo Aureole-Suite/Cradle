@@ -207,6 +207,7 @@ dependencies = [
  "filetest",
  "png",
  "strength_reduce",
+ "strict_result",
  "tracing",
  "tracing-error",
  "tracing-subscriber",
@@ -756,6 +757,12 @@ name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
+
+[[package]]
+name = "strict_result"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "721c36b5e593790ae6b96747b657482f8d90eee883cf83f15d0ada5c7eea7d78"
 
 [[package]]
 name = "strsim"

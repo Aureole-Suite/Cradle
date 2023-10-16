@@ -4,6 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use clap::ValueHint;
 use eyre_span::emit;
+use strict_result::*;
 
 mod itp_png;
 mod itp_dds;
@@ -112,8 +113,8 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 
 fn from_itp(args: &Args, itp_bytes: &[u8], output: util::Output) -> eyre::Result<Utf8PathBuf> {
 	let itp = tracing::info_span!("parse_itp").in_scope(|| {
-		cradle::itp::read(itp_bytes).map_err(eyre::Report::from)
-	})?;
+		Ok(cradle::itp::read(itp_bytes)?)
+	}).strict()?;
 	if args.dds {
 		let output = output.with_extension("dds");
 		let f = std::fs::File::create(&output)?;
@@ -132,10 +133,9 @@ fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
 	let data = match path.extension() {
 		Some("png") => {
 			let data = std::fs::File::open(path)?;
-			let png = tracing::info_span!("parse_png").in_scope(|| {
-				itp_png::read_png(args, &data).map_err(eyre::Report::from)
+			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
+				itp_png::png_to_itp(args, &itp_png::read_png(args, &data)?)
 			})?;
-			let mut itp = itp_png::png_to_itp(args, &png)?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
@@ -143,7 +143,7 @@ fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
 		Some("dds") => {
 			let data = std::fs::File::open(path)?;
 			let mut itp = tracing::info_span!("parse_dds").in_scope(|| {
-				itp_dds::dds_to_itp(args, &data).map_err(eyre::Report::from)
+				itp_dds::dds_to_itp(args, &data)
 			})?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
