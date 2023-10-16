@@ -1,4 +1,6 @@
 use camino::Utf8PathBuf;
+use cradle::itp::{Itp, ImageData, Palette};
+use strict_result::Strict;
 
 use crate::{util::Output, Args};
 
@@ -51,7 +53,30 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 			std::fs::write(&frame_out, itp)?;
 			frame_out
 		} else {
-			crate::from_itp(args, itp, Output::In(frame_out.clone()))?
+			let mut itp = tracing::info_span!("parse_itp").in_scope(|| {
+				Ok(cradle::itp::read(itp)?)
+			}).strict()?;
+
+			if let Itp { data: ImageData::Indexed(pal @ Palette::External(..), _), ..} = &mut itp {
+				if let Some(palette) = &itc.palette {
+					*pal = Palette::Embedded(palette.clone())
+				} else {
+					eyre::bail!("no palette")
+				}
+			}
+
+			if args.dds {
+				let output = frame_out.with_extension("dds");
+				let f = std::fs::File::create(&output)?;
+				crate::itp_dds::itp_to_dds(args, f, &itp)?;
+				output
+			} else {
+				let output = frame_out.with_extension("png");
+				let f = std::fs::File::create(&output)?;
+				let png = crate::itp_png::itp_to_png(args, &itp)?;
+				crate::itp_png::write_png(args, f, &png)?;
+				output
+			}
 		};
 
 		// Not sure if this is the right formula? Previous Cradle use different
