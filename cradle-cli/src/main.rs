@@ -118,7 +118,8 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			} else {
 				let output = cli.output(file, "png")?;
 				let f = std::fs::File::create(&output)?;
-				itp_png::itp_to_png(args, f, &itp)?;
+				let png = itp_png::itp_to_png(args, &itp)?;
+				itp_png::write_png(args, f, &png)?;
 				tracing::info!("wrote to {output}");
 			}
 		}
