@@ -30,6 +30,9 @@ enum InnerError {
 	#[snafu(display("CCPI only supports Bz_1 compression or none"))]
 	CcpiCompression,
 
+	#[snafu(display("CCPI does not support mipmaps"))]
+	CcpiMipmaps,
+
 	#[snafu(display("AFastMode2 can only store 16 colors per 8×16 tile"))]
 	AFastMode2Colors,
 
@@ -283,7 +286,7 @@ fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, ran
 		ImageData::Indexed(_, data) => match status.base_format {
 			BFT::Indexed1 => write_idat_simple(&data[range], status, width, height, u8::to_le_bytes),
 			BFT::Indexed2 => {
-				let data = a_fast_mode2(data, width, height)?;
+				let data = a_fast_mode2(&data[range], width, height)?;
 				let mut f = Writer::new();
 				f.u32(data.len() as u32);
 				f.slice(&maybe_compress(status.compression, &data));
@@ -331,6 +334,8 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	let ImageData::Indexed(pal, pixels) = &itp.data else {
 		bail!(e::CcpiMustBeIndexed)
 	};
+
+	ensure!(pixels.len() == itp.width as usize * itp.height as usize, e::CcpiMipmaps);
 
 	let mut status_copy = itp.status.clone();
 	status_copy.compression = CT::None;
