@@ -15,4 +15,4 @@ package.simd-adler32.opt-level = 3
 package.flate2.opt-level = 3
 package.adler.opt-level = 3
 package.miniz_oxide.opt-level = 3
-package.strength-reduce.opt-level = 3
+package.strength_reduce.opt-level = 3
