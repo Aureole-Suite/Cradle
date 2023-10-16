@@ -250,6 +250,10 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 	match pal {
 		Palette::Embedded(pal) => {
 			let mut colors = pal.to_owned();
+			for c in &mut colors {
+				let [b, g, r, a] = u32::to_le_bytes(*c);
+				*c = u32::from_le_bytes([r, g, b, a]);
+			}
 			if status.base_format == BFT::Indexed2 {
 				for i in (1..colors.len()).rev() {
 					colors[i] = colors[i].wrapping_sub(colors[i-1])

@@ -29,7 +29,10 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 			let mut pal2 = [0; 256];
 			pal2[..pal.len()].copy_from_slice(pal);
 			pal2.iter()
-				.flat_map(|a| u32::to_le_bytes(*a))
+				.flat_map(|a| {
+					let [b, g, r, a] = u32::to_le_bytes(*a);
+					[r, g, b, a]
+				})
 				.chain(data.iter().copied())
 				.collect()
 		}
@@ -87,7 +90,7 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 		let mut palette = [0; 4*256];
 		read.read_exact(&mut palette)?;
 		let mut palette = palette.array_chunks().copied()
-			.map(u32::from_le_bytes)
+			.map(|[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))
 			.collect::<Vec<_>>();
 		let data = read_data(read, u8::from_le_bytes)?;
 
