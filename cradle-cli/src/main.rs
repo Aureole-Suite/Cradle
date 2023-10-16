@@ -7,6 +7,7 @@ use eyre_span::emit;
 
 mod itp_png;
 mod itp_dds;
+mod util;
 
 #[derive(Debug, Clone, Parser)]
 #[command(arg_required_else_help = true)]
@@ -52,22 +53,8 @@ struct Args {
 }
 
 impl Cli {
-	fn output(&self, path: &Utf8Path, ext: &str) -> eyre::Result<Utf8PathBuf> {
-		let dir = if let Some(output) = self.output.as_ref() {
-			if self.file.len() == 1 && !output.as_str().ends_with(std::path::is_separator) {
-				if let Some(parent) = output.parent() {
-					std::fs::create_dir_all(parent)?;
-				}
-				return Ok(output.clone())
-			}
-
-			std::fs::create_dir_all(output)?;
-			output
-		} else {
-			path.parent().ok_or_else(|| eyre::eyre!("file has no parent"))?
-		};
-		let name = path.file_name().ok_or_else(|| eyre::eyre!("file has no name"))?;
-		Ok(dir.join(name).with_extension(ext))
+	fn output<'a>(&'a self, path: &'a Utf8Path) -> eyre::Result<util::Output> {
+		util::Output::from_output_flag(self.output.as_deref(), path, self.file.len())
 	}
 }
 
@@ -103,6 +90,7 @@ fn init_tracing() -> Result<(), eyre::Error> {
 #[tracing::instrument(skip_all, fields(path=%file))]
 fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	let ext = file.extension().unwrap_or("");
+	let output = cli.output(file)?;
 	let args = &cli.args;
 	match ext {
 		"itp" => {
@@ -111,12 +99,12 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 				cradle::itp::read(&data).map_err(eyre::Report::from)
 			})?;
 			if args.dds {
-				let output = cli.output(file, "dds")?;
+				let output = output.with_extension("dds");
 				let f = std::fs::File::create(&output)?;
 				itp_dds::itp_to_dds(args, f, &itp)?;
 				tracing::info!("wrote to {output}");
 			} else {
-				let output = cli.output(file, "png")?;
+				let output = output.with_extension("png");
 				let f = std::fs::File::create(&output)?;
 				let png = itp_png::itp_to_png(args, &itp)?;
 				itp_png::write_png(args, f, &png)?;
@@ -129,7 +117,7 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 				itp_dds::dds_to_itp(args, &data).map_err(eyre::Report::from)
 			})?;
 			guess_itp_revision(args, &mut itp);
-			let output = cli.output(file, "itp")?;
+			let output = output.with_extension("itp");
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
@@ -140,7 +128,7 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			})?;
 			let mut itp = itp_png::png_to_itp(args, &png)?;
 			guess_itp_revision(args, &mut itp);
-			let output = cli.output(file, "itp")?;
+			let output = output.with_extension("itp");
 			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
