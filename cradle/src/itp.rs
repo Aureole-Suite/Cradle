@@ -162,6 +162,10 @@ pub fn read(f: &[u8]) -> Result<Itp, read::Error> {
 	read::read(&mut Reader::new(f))
 }
 
+pub fn read_size(f: &[u8]) -> Result<(u32, u32), read::Error> {
+	read::read_size(&mut Reader::new(f))
+}
+
 pub fn write(itp: &Itp) -> Result<Vec<u8>, write::Error> {
 	write::write(itp)
 }

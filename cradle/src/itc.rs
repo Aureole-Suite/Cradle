@@ -140,7 +140,9 @@ pub fn read(data: &[u8]) -> Result<Itc, ReadError> {
 	let mut starts = frames.iter().map(|a| a.order).collect::<Vec<_>>();
 	starts.sort();
 	for frame in &mut frames {
-		frame.order = starts.binary_search(&frame.order).unwrap();
+		if frame.itp.is_some() {
+			frame.order = starts.binary_search(&frame.order).unwrap();
+		}
 	}
 
 	for k in &mut frames { k.unknown  = f.u16()?; }
