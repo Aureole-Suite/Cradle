@@ -59,6 +59,7 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 
 			if let Itp { data: ImageData::Indexed(pal @ Palette::External(..), _), ..} = &mut itp {
 				if let Some(palette) = &itc.palette {
+					tracing::warn!("inlining palette");
 					*pal = Palette::Embedded(palette.clone())
 				} else {
 					eyre::bail!("no palette")
@@ -87,7 +88,7 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 		&json_out,
 		crate::util::MyFormatter::new(2),
 		ItcSpec {
-			palette: itc.palette.clone(),
+			palette: itc.palette.as_ref().filter(|_| args.itp).cloned(),
 			frames: frames.into_iter().map(|a| a.1).collect(),
 		},
 	)?;
