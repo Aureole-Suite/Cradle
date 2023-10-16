@@ -357,22 +357,22 @@ fn read_idat_simple<T, const N: usize>(
 	from_le_bytes: fn([u8; N]) -> T,
 ) -> Result<Vec<T>, Error> {
 	let data = read_maybe_compressed(f, status.compression, (width * height) as usize * N)?;
-	let mut data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
-	do_unswizzle(&mut data, width as usize, height as usize, status.pixel_format);
-	Ok(data)
+	let data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
+	Ok(do_unswizzle(data, width as usize, height as usize, status.pixel_format))
 }
 
-fn do_unswizzle<T>(data: &mut [T], width: usize, height: usize, pixel_format: PFT) {
+fn do_unswizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
 	match pixel_format {
 		PFT::Linear => {},
-		PFT::Pfp_1 => permute::unswizzle(data, height, width, 8, 16),
-		PFT::Pfp_2 => permute::unswizzle(data, height, width, 32, 32),
-		PFT::Pfp_3 => permute::unmorton(data, height, width),
+		PFT::Pfp_1 => permute::unswizzle(&mut data, height, width, 8, 16),
+		PFT::Pfp_2 => permute::unswizzle(&mut data, height, width, 32, 32),
+		PFT::Pfp_3 => permute::unmorton(&mut data, height, width),
 		PFT::Pfp_4 => {
-			permute::unmorton(data, width*height/8, 8);
-			permute::unswizzle(data, height, width, 8, 1);
+			permute::unmorton(&mut data, width*height/8, 8);
+			permute::unswizzle(&mut data, height, width, 8, 1);
 		}
 	}
+	data
 }
 
 fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
@@ -535,9 +535,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 	}
 	ensure_end(c)?;
 
-	do_unswizzle(&mut data, width as usize, height as usize, PFT::Pfp_1);
-
-	Ok(data)
+	Ok(do_unswizzle(data, width as usize, height as usize, PFT::Pfp_1))
 }
 
 fn read_maybe_compressed(f: &mut Reader, comp: CT, len: usize) -> Result<Vec<u8>, Error> {
