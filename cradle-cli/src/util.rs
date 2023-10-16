@@ -1,5 +1,6 @@
 use camino::{Utf8PathBuf, Utf8Path};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Output<'a> {
 	At { path: &'a Utf8Path },
 	In { dir: &'a Utf8Path, name: &'a str },
