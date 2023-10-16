@@ -69,11 +69,18 @@ pub struct Frame {
 
 impl std::fmt::Debug for Frame {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		struct OpaqueVec(usize);
+		impl std::fmt::Debug for OpaqueVec {
+			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(f, "[_; {}]", self.0)
+			}
+		}
+
 		if self == &Frame::default() {
 			write!(f, "Frame::default()")
 		} else {
 			f.debug_struct("Frame")
-				.field("itp", &self.itp)
+				.field("itp", &self.itp.as_ref().map(|a| OpaqueVec(a.len())))
 				.field("unknown", &self.unknown)
 				.field("offset", &self.offset)
 				.field("scale", &self.scale)
