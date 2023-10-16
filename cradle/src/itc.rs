@@ -60,10 +60,11 @@ macro_rules! bail {
 
 #[derive(Clone, PartialEq)]
 pub struct Frame {
-	pub itp: Option<(usize, Vec<u8>)>,
+	pub itp: Option<Vec<u8>>,
 	pub unknown: u16,
 	pub offset: (f32, f32),
 	pub scale: (f32, f32),
+	pub order: usize,
 }
 
 impl std::fmt::Debug for Frame {
@@ -76,6 +77,7 @@ impl std::fmt::Debug for Frame {
 				.field("unknown", &self.unknown)
 				.field("offset", &self.offset)
 				.field("scale", &self.scale)
+				.field("order", &self.order)
 				.finish()
 		}
 	}
@@ -88,6 +90,7 @@ impl Default for Frame {
 			unknown: 0,
 			offset: (0.0, 0.0),
 			scale: (1.0, 1.0),
+			order: usize::MAX,
 		}
 	}
 }
@@ -122,16 +125,15 @@ pub fn read(data: &[u8]) -> Result<Itc, ReadError> {
 		let start = f.u32()? as usize;
 		let length = f.u32()? as usize;
 		if (start, length) != (0, 0) {
-			frame.itp = Some((start, f.at(start)?.slice(length)?.to_vec()));
+			frame.order = start;
+			frame.itp = Some(f.at(start)?.slice(length)?.to_vec());
 		}
 	}
 
-	let mut starts = frames.iter().flat_map(|a| a.itp.as_ref().map(|a| a.0)).collect::<Vec<_>>();
+	let mut starts = frames.iter().map(|a| a.order).collect::<Vec<_>>();
 	starts.sort();
 	for frame in &mut frames {
-		if let Some((order, _)) = &mut frame.itp {
-			*order = starts.binary_search(order).unwrap();
-		}
+		frame.order = starts.binary_search(&frame.order).unwrap();
 	}
 
 	for k in &mut frames { k.unknown  = f.u16()?; }
@@ -180,12 +182,12 @@ pub fn write(itc: &Itc) -> Result<Vec<u8>, WriteError> {
 	let mut outputs = Vec::new();
 
 	for frame in &itc.frames {
-		if let Some((order, itp)) = &frame.itp {
+		if let Some(itp) = &frame.itp {
 			let mut g = Writer::new();
 			slice.label32(g.here());
 			g.slice(itp);
 			slice.u32(g.len() as u32);
-			outputs.push((order, g));
+			outputs.push((frame.order, g));
 		} else {
 			slice.u32(0);
 			slice.u32(0);
@@ -221,7 +223,7 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), anyhow::Error> {
 	assert_eq!(bytes, bytes2);
 
 	for frame in &itc.frames {
-		if let Some((_, itpdata)) = &frame.itp {
+		if let Some(itpdata) = &frame.itp {
 			let itp = crate::itp::read(itpdata)?;
 			crate::itp::write(&itp)?;
 		}
