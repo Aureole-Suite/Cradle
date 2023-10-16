@@ -128,7 +128,10 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	match ext {
 		"itp" => {
 			let data = std::fs::read(file)?;
-			let output = from_itp(args, &data, output)?;
+			let itp = tracing::info_span!("parse_itp").in_scope(|| {
+				Ok(cradle::itp::read(&data)?)
+			}).strict()?;
+			let output = from_itp(args, &itp, output)?;
 			tracing::info!("wrote to {output}");
 		}
 		"dds" | "png" => {
@@ -152,19 +155,16 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn from_itp(args: &Args, itp_bytes: &[u8], output: util::Output) -> eyre::Result<Utf8PathBuf> {
-	let itp = tracing::info_span!("parse_itp")
-		.in_scope(|| Ok(cradle::itp::read(itp_bytes)?))
-		.strict()?;
+fn from_itp(args: &Args, itp: &cradle::itp::Itp, output: util::Output) -> eyre::Result<Utf8PathBuf> {
 	if args.dds {
 		let output = output.with_extension("dds");
 		let f = std::fs::File::create(&output)?;
-		itp_dds::itp_to_dds(args, f, &itp)?;
+		itp_dds::itp_to_dds(args, f, itp)?;
 		Ok(output)
 	} else {
 		let output = output.with_extension("png");
 		let f = std::fs::File::create(&output)?;
-		let png = itp_png::itp_to_png(args, &itp)?;
+		let png = itp_png::itp_to_png(args, itp)?;
 		png::write(args, f, &png)?;
 		Ok(output)
 	}
