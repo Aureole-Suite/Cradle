@@ -196,11 +196,9 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
 	let itp = cradle::itp::read(bytes)?;
 	let mut png_data = Vec::new();
 	itp_to_png(args, Cursor::new(&mut png_data), &itp)?;
-	std::fs::write("/tmp/a.png", &png_data)?;
 	let itp2 = png_to_itp(args, Cursor::new(&png_data))?;
 	let mut png_data2 = Vec::new();
 	itp_to_png(args, Cursor::new(&mut png_data2), &itp2)?;
-	std::fs::write("/tmp/b.png", &png_data2)?;
 	assert!(png_data == png_data2);
 	Ok(())
 }
