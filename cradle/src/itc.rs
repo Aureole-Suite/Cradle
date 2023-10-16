@@ -1,19 +1,61 @@
 use gospel::read::{Reader, Le as _};
 use gospel::write::{Writer, Le as _};
+use snafu::prelude::*;
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	#[error("{source}")]
-	Read { #[from] source: gospel::read::Error, backtrace: std::backtrace::Backtrace },
-
-	#[error("{source}")]
-	Write { #[from] source: gospel::write::Error, backtrace: std::backtrace::Backtrace },
-
-	#[error("{source}")]
-	Compression { #[from] source: falcompress::Error, backtrace: std::backtrace::Backtrace },
-
-	#[error("this is not an itc file")]
+#[derive(Debug, Snafu)]
+pub enum ReadError {
+	#[snafu(display("this is not an itc file"))]
 	NotItc,
+
+	#[allow(private_interfaces)]
+	#[snafu(context(false))]
+	Invalid { source: InnerReadError, backtrace: std::backtrace::Backtrace },
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(module(er), context(suffix(false)))]
+enum InnerReadError {
+	#[snafu(context(false))]
+	Read { source: gospel::read::Error },
+
+	#[snafu(context(false))]
+	Compress { source: falcompress::Error },
+}
+
+impl From<gospel::read::Error> for ReadError {
+	fn from(source: gospel::read::Error) -> Self {
+		InnerReadError::from(source).into()
+	}
+}
+
+impl From<falcompress::Error> for ReadError {
+	fn from(source: falcompress::Error) -> Self {
+		InnerReadError::from(source).into()
+	}
+}
+
+#[derive(Debug, Snafu)]
+pub enum WriteError {
+	#[allow(private_interfaces)]
+	#[snafu(context(false))]
+	Invalid { source: InnerWriteError, backtrace: std::backtrace::Backtrace },
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(module(ew), context(suffix(false)))]
+enum InnerWriteError {
+	#[snafu(context(false))]
+	Write { source: gospel::write::Error },
+}
+
+impl From<gospel::write::Error> for WriteError {
+	fn from(source: gospel::write::Error) -> Self {
+		InnerWriteError::from(source).into()
+	}
+}
+
+macro_rules! bail {
+	($e:expr) => { $e.fail::<!>()? }
 }
 
 #[derive(Clone, PartialEq)]
@@ -65,13 +107,13 @@ impl Default for Itc {
 	}
 }
 
-pub fn read(data: &[u8]) -> Result<Itc, Error> {
+pub fn read(data: &[u8]) -> Result<Itc, ReadError> {
 	let mut f = Reader::new(data);
 
 	let has_palette = match &f.array()? {
 		b"V101" => false,
 		b"V102" => true,
-		_ => return Err(Error::NotItc),
+		_ => bail!(NotItcSnafu),
 	};
 
 	let mut frames = std::array::from_fn(|_| Frame::default());
@@ -115,7 +157,7 @@ pub fn read(data: &[u8]) -> Result<Itc, Error> {
 	})
 }
 
-pub fn write(itc: &Itc) -> Result<Vec<u8>, Error> {
+pub fn write(itc: &Itc) -> Result<Vec<u8>, WriteError> {
 	let mut f = Writer::new();
 	let mut slice = Writer::new();
 	let mut unknown = Writer::new();
