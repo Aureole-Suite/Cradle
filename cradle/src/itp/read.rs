@@ -534,7 +534,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 	}
 	ensure_end(c)?;
 
-	permute::unswizzle(&mut data, height as usize, width as usize, 8, 16);
+	do_unswizzle(&mut data, width as usize, height as usize, PFT::Pfp_1);
 
 	Ok(data)
 }

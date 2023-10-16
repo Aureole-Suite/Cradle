@@ -407,7 +407,7 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 	}
 
 	let mut data = data.to_vec();
-	permute::swizzle(&mut data, height as usize, width as usize, 8, 16);
+	do_swizzle(&mut data, width as usize, height as usize, PFT::Pfp_1);
 
 	let mut colors = Vec::new();
 	let mut out = Vec::new();
