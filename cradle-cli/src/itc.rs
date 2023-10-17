@@ -95,3 +95,8 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 
 	Ok(json_out)
 }
+
+pub fn create(args: &Args, spec: ItcSpec, output: Output) -> eyre::Result<Utf8PathBuf> {
+	println!("{:?}", spec);
+	eyre::bail!("foo")
+}
