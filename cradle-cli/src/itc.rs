@@ -66,7 +66,7 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 				}
 			}
 
-			crate::from_itp(args, &itp, Output::At(frame_out))?
+			crate::from_itp(args, &itp, Output::In(frame_out))?
 		};
 
 		// Not sure if this is the right formula? Previous Cradle use different
