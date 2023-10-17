@@ -102,7 +102,8 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 			f.seek(f.pos() - 4)?;
 			return read_revision_3(f);
 		}
-		999 => 0x108802,  // Argb16_2, None, Linear
+		#[rustfmt::skip]
+		999  => 0x108802, // Argb16_2, None, Linear
 		1000 => 0x108801, // Indexed1, None, Linear
 		1001 => 0x110802, // Argb16_2, Bz_1, Linear
 		1002 => 0x110801, // Indexed1, Bz_1, Linear
