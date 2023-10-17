@@ -366,23 +366,34 @@ fn read_idat(
 	f: &mut Reader,
 	status: &ItpStatus,
 	data: &mut ImageData,
-	width: u32,
-	height: u32,
+	w: u32,
+	h: u32,
 ) -> Result<(), Error> {
+	fn inner<T, const N: usize>(
+		f: &mut Reader,
+		status: &ItpStatus,
+		w: u32,
+		h: u32,
+		from_le_bytes: fn([u8; N]) -> T,
+	) -> Result<Vec<T>, Error> {
+		let data = read_maybe_compressed(f, status.compression, (w * h) as usize * N)?;
+		let data = data.array_chunks().copied().map(from_le_bytes).collect();
+		Ok(do_unswizzle(
+			data,
+			w as usize,
+			h as usize,
+			status.pixel_format,
+		))
+	}
+
 	match data {
 		ImageData::Indexed(_, data) => match status.base_format {
-			BFT::Indexed1 => data.extend(read_idat_simple(
-				f,
-				status,
-				width,
-				height,
-				u8::from_le_bytes,
-			)?),
+			BFT::Indexed1 => data.extend(inner(f, status, w, h, u8::from_le_bytes)?),
 			BFT::Indexed2 => data.extend({
 				let size = f.u32()? as usize;
 				let data = read_maybe_compressed(f, status.compression, size)?;
 				let g = &mut Reader::new(&data);
-				let data = a_fast_mode2(g, width, height)?;
+				let data = a_fast_mode2(g, w, h)?;
 				ensure_end(g)?;
 				data
 			}),
@@ -391,71 +402,14 @@ fn read_idat(
 			}),
 			_ => unreachable!(),
 		},
-		ImageData::Argb16(_, data) => data.extend(read_idat_simple(
-			f,
-			status,
-			width,
-			height,
-			u16::from_le_bytes,
-		)?),
-		ImageData::Argb32(data) => data.extend(read_idat_simple(
-			f,
-			status,
-			width,
-			height,
-			u32::from_le_bytes,
-		)?),
-		ImageData::Bc1(data) => data.extend(read_idat_simple(
-			f,
-			status,
-			width / 4,
-			height / 4,
-			u64::from_le_bytes,
-		)?),
-		ImageData::Bc2(data) => data.extend(read_idat_simple(
-			f,
-			status,
-			width / 4,
-			height / 4,
-			u128::from_le_bytes,
-		)?),
-		ImageData::Bc3(data) => data.extend(read_idat_simple(
-			f,
-			status,
-			width / 4,
-			height / 4,
-			u128::from_le_bytes,
-		)?),
-		ImageData::Bc7(data) => data.extend(read_idat_simple(
-			f,
-			status,
-			width / 4,
-			height / 4,
-			u128::from_le_bytes,
-		)?),
+		ImageData::Argb16(_, data) => data.extend(inner(f, status, w, h, u16::from_le_bytes)?),
+		ImageData::Argb32(data) => data.extend(inner(f, status, w, h, u32::from_le_bytes)?),
+		ImageData::Bc1(data) => data.extend(inner(f, status, w / 4, h / 4, u64::from_le_bytes)?),
+		ImageData::Bc2(data) => data.extend(inner(f, status, w / 4, h / 4, u128::from_le_bytes)?),
+		ImageData::Bc3(data) => data.extend(inner(f, status, w / 4, h / 4, u128::from_le_bytes)?),
+		ImageData::Bc7(data) => data.extend(inner(f, status, w / 4, h / 4, u128::from_le_bytes)?),
 	}
 	Ok(())
-}
-
-fn read_idat_simple<T, const N: usize>(
-	f: &mut Reader,
-	status: &ItpStatus,
-	width: u32,
-	height: u32,
-	from_le_bytes: fn([u8; N]) -> T,
-) -> Result<Vec<T>, Error> {
-	let data = read_maybe_compressed(f, status.compression, (width * height) as usize * N)?;
-	let data = data
-		.array_chunks()
-		.copied()
-		.map(from_le_bytes)
-		.collect::<Vec<_>>();
-	Ok(do_unswizzle(
-		data,
-		width as usize,
-		height as usize,
-		status.pixel_format,
-	))
 }
 
 fn do_unswizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
