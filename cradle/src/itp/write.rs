@@ -304,19 +304,29 @@ fn write_ipal(
 
 fn write_idat(
 	status: &ItpStatus,
-	width: u32,
-	height: u32,
+	w: u32,
+	h: u32,
 	data: &ImageData,
 	range: std::ops::Range<usize>,
 ) -> Result<Vec<u8>, Error> {
+	fn inner<T: Clone, const N: usize>(
+		data: &[T],
+		status: &ItpStatus,
+		w: u32,
+		h: u32,
+		to_le_bytes: fn(T) -> [u8; N],
+	) -> Vec<u8> {
+		let data = do_swizzle(data.to_vec(), w as usize, h as usize, status.pixel_format);
+		let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
+		maybe_compress(status.compression, &data)
+	}
+
 	let bc_range = range.start / 16..range.end / 16;
 	Ok(match data {
 		ImageData::Indexed(_, data) => match status.base_format {
-			BFT::Indexed1 => {
-				write_idat_simple(&data[range], status, width, height, u8::to_le_bytes)
-			}
+			BFT::Indexed1 => inner(&data[range], status, w, h, u8::to_le_bytes),
 			BFT::Indexed2 => {
-				let data = a_fast_mode2(&data[range], width, height)?;
+				let data = a_fast_mode2(&data[range], w, h)?;
 				let mut f = Writer::new();
 				f.u32(data.len() as u32);
 				f.slice(&maybe_compress(status.compression, &data));
@@ -327,58 +337,13 @@ fn write_idat(
 			}),
 			_ => unreachable!(),
 		},
-		ImageData::Argb16(_, data) => {
-			write_idat_simple(&data[range], status, width, height, u16::to_le_bytes)
-		}
-		ImageData::Argb32(data) => {
-			write_idat_simple(&data[range], status, width, height, u32::to_le_bytes)
-		}
-		ImageData::Bc1(data) => write_idat_simple(
-			&data[bc_range],
-			status,
-			width / 4,
-			height / 4,
-			u64::to_le_bytes,
-		),
-		ImageData::Bc2(data) => write_idat_simple(
-			&data[bc_range],
-			status,
-			width / 4,
-			height / 4,
-			u128::to_le_bytes,
-		),
-		ImageData::Bc3(data) => write_idat_simple(
-			&data[bc_range],
-			status,
-			width / 4,
-			height / 4,
-			u128::to_le_bytes,
-		),
-		ImageData::Bc7(data) => write_idat_simple(
-			&data[bc_range],
-			status,
-			width / 4,
-			height / 4,
-			u128::to_le_bytes,
-		),
+		ImageData::Argb16(_, data) => inner(&data[range], status, w, h, u16::to_le_bytes),
+		ImageData::Argb32(data) => inner(&data[range], status, w, h, u32::to_le_bytes),
+		ImageData::Bc1(data) => inner(&data[bc_range], status, w / 4, h / 4, u64::to_le_bytes),
+		ImageData::Bc2(data) => inner(&data[bc_range], status, w / 4, h / 4, u128::to_le_bytes),
+		ImageData::Bc3(data) => inner(&data[bc_range], status, w / 4, h / 4, u128::to_le_bytes),
+		ImageData::Bc7(data) => inner(&data[bc_range], status, w / 4, h / 4, u128::to_le_bytes),
 	})
-}
-
-fn write_idat_simple<T: Clone, const N: usize>(
-	data: &[T],
-	status: &ItpStatus,
-	width: u32,
-	height: u32,
-	to_le_bytes: fn(T) -> [u8; N],
-) -> Vec<u8> {
-	let data = do_swizzle(
-		data.to_vec(),
-		width as usize,
-		height as usize,
-		status.pixel_format,
-	);
-	let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
-	maybe_compress(status.compression, &data)
 }
 
 fn do_swizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
