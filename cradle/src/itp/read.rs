@@ -275,10 +275,13 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 	}
 
 	ensure_size(f.pos() - start, file_size)?;
-	ensure!(n_mip == current_mip, e::WrongMips {
-		expected: n_mip,
-		value: current_mip
-	});
+	ensure!(
+		n_mip == current_mip,
+		e::WrongMips {
+			expected: n_mip,
+			value: current_mip
+		}
+	);
 
 	Ok(Itp {
 		status,

@@ -81,19 +81,26 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 		let xo = frame.offset.0 * w as f32;
 		let yo = frame.offset.1 * h as f32;
 
-		frames.push((frame.order, FrameSpec {
-			frame: i,
-			path: frame_out.strip_prefix(&outdir).unwrap().to_path_buf(),
-			offset: Some((xo, yo)),
-			scale: (xs, ys),
-		}));
+		frames.push((
+			frame.order,
+			FrameSpec {
+				frame: i,
+				path: frame_out.strip_prefix(&outdir).unwrap().to_path_buf(),
+				offset: Some((xo, yo)),
+				scale: (xs, ys),
+			},
+		));
 	}
 
 	frames.sort_by_key(|a| a.0);
-	crate::Spec::write(&json_out, crate::util::MyFormatter::new(2), ItcSpec {
-		palette: itc.palette.as_ref().filter(|_| args.itp).cloned(),
-		frames: frames.into_iter().map(|a| a.1).collect(),
-	})?;
+	crate::Spec::write(
+		&json_out,
+		crate::util::MyFormatter::new(2),
+		ItcSpec {
+			palette: itc.palette.as_ref().filter(|_| args.itp).cloned(),
+			frames: frames.into_iter().map(|a| a.1).collect(),
+		},
+	)?;
 
 	Ok(json_out)
 }
