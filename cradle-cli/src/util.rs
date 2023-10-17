@@ -74,7 +74,11 @@ impl serde_json::ser::Formatter for MyFormatter {
 			indent(writer, self.level - 1, self.indent_to - 1)?;
 		}
 		self.level -= 1;
-		writer.write_all(b"]")
+		writer.write_all(b"]")?;
+		if self.level == 0 {
+			writer.write_all(b"\n")?;
+		}
+		Ok(())
 	}
 
 	#[inline]
@@ -105,7 +109,11 @@ impl serde_json::ser::Formatter for MyFormatter {
 			indent(writer, self.level - 1, self.indent_to - 1)?;
 		}
 		self.level -= 1;
-		writer.write_all(b"}")
+		writer.write_all(b"}")?;
+		if self.level == 0 {
+			writer.write_all(b"\n")?;
+		}
+		Ok(())
 	}
 
 	#[inline]
