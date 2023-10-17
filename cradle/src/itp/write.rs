@@ -316,7 +316,7 @@ fn write_idat(
 		h: u32,
 		to_le_bytes: fn(T) -> [u8; N],
 	) -> Vec<u8> {
-		let data = do_swizzle(data.to_vec(), w as usize, h as usize, status.pixel_format);
+		let data = do_swizzle(data.to_vec(), w, h, status.pixel_format);
 		let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
 		maybe_compress(status.compression, &data)
 	}
@@ -346,7 +346,9 @@ fn write_idat(
 	})
 }
 
-fn do_swizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
+fn do_swizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -> Vec<T> {
+	let width = width as usize;
+	let height = height as usize;
 	match pixel_format {
 		PFT::Linear => {}
 		PFT::Pfp_1 => permute::swizzle(&mut data, height, width, 8, 16),
@@ -444,7 +446,7 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 		}
 	}
 
-	let data = do_swizzle(data.to_vec(), width as usize, height as usize, PFT::Pfp_1);
+	let data = do_swizzle(data.to_vec(), width, height, PFT::Pfp_1);
 
 	let mut colors = Vec::new();
 	let mut out = Vec::new();

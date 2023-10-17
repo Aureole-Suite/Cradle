@@ -413,12 +413,7 @@ fn read_idat(
 	) -> Result<Vec<T>, Error> {
 		let data = read_maybe_compressed(f, status.compression, (w * h) as usize * N)?;
 		let data = data.array_chunks().copied().map(from_le_bytes).collect();
-		Ok(do_unswizzle(
-			data,
-			w as usize,
-			h as usize,
-			status.pixel_format,
-		))
+		Ok(do_unswizzle(data, w, h, status.pixel_format))
 	}
 
 	match data {
@@ -447,7 +442,9 @@ fn read_idat(
 	Ok(())
 }
 
-fn do_unswizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
+fn do_unswizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -> Vec<T> {
+	let width = width as usize;
+	let height = height as usize;
 	match pixel_format {
 		PFT::Linear => {}
 		PFT::Pfp_1 => permute::unswizzle(&mut data, height, width, 8, 16),
@@ -629,12 +626,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 	}
 	ensure_end(c)?;
 
-	Ok(do_unswizzle(
-		data,
-		width as usize,
-		height as usize,
-		PFT::Pfp_1,
-	))
+	Ok(do_unswizzle(data, width, height, PFT::Pfp_1))
 }
 
 fn read_maybe_compressed(f: &mut Reader, comp: CT, len: usize) -> Result<Vec<u8>, Error> {
