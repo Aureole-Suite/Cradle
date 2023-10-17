@@ -253,7 +253,8 @@ pub fn status_to_flags(status: &ItpStatus) -> Option<u32> {
 
 pub fn flags_to_gen1(flags: u32) -> Option<u32> {
 	Some(match flags {
-		0x108802 => 999,  // Argb16_2, None, Linear
+		#[rustfmt::skip]
+		0x108802 =>  999, // Argb16_2, None, Linear
 		0x108801 => 1000, // Indexed1, None, Linear
 		0x110802 => 1001, // Argb16_2, Bz_1, Linear
 		0x110801 => 1002, // Indexed1, Bz_1, Linear
