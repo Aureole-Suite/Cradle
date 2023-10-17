@@ -6,9 +6,9 @@ use clap::ValueHint;
 use eyre_span::emit;
 use strict_result::*;
 
-mod itp_png;
-mod itp_dds;
 mod itc;
+mod itp_dds;
+mod itp_png;
 mod util;
 
 #[derive(Debug, Clone, Parser)]
@@ -71,12 +71,10 @@ impl Cli {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[derive(derive_more::From)]
-#[serde(tag = "type", rename_all="snake_case")]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, derive_more::From)]
+#[serde(tag = "type", rename_all = "snake_case")]
 enum Spec {
-	Itc(itc::ItcSpec)
+	Itc(itc::ItcSpec),
 }
 
 impl Spec {
@@ -110,11 +108,8 @@ fn init_tracing() -> Result<(), eyre::Error> {
 	use tracing_error::ErrorLayer;
 	use tracing_subscriber::prelude::*;
 	use tracing_subscriber::{fmt, EnvFilter};
-	let fmt_layer = fmt::layer()
-		.with_writer(std::io::stderr)
-		.with_target(false);
-	let filter_layer = EnvFilter::try_from_default_env()
-		.or_else(|_| EnvFilter::try_new("info"))?;
+	let fmt_layer = fmt::layer().with_writer(std::io::stderr).with_target(false);
+	let filter_layer = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?;
 	tracing_subscriber::registry()
 		.with(filter_layer)
 		.with(fmt_layer)
@@ -136,9 +131,9 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 	match ext {
 		"itp" => {
 			let data = std::fs::read(file)?;
-			let itp = tracing::info_span!("parse_itp").in_scope(|| {
-				Ok(cradle::itp::read(&data)?)
-			}).strict()?;
+			let itp = tracing::info_span!("parse_itp")
+				.in_scope(|| Ok(cradle::itp::read(&data)?))
+				.strict()?;
 			let output = from_itp(args, &itp, output)?;
 			tracing::info!("wrote to {output}");
 		}
@@ -152,18 +147,18 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 
 		"itc" => {
 			let data = std::fs::read(file)?;
-			let itc = tracing::info_span!("parse_itc").in_scope(|| {
-				Ok(cradle::itc::read(&data)?)
-			}).strict()?;
+			let itc = tracing::info_span!("parse_itc")
+				.in_scope(|| Ok(cradle::itc::read(&data)?))
+				.strict()?;
 			let output = crate::itc::extract(args, &itc, output)?;
 			tracing::info!("wrote to {output}");
 		}
 
 		"json" => {
 			let output = cli.output(&file.with_extension(""))?; // to strip off the duplicate .ext.json suffix
-			let spec = tracing::info_span!("parse_json").in_scope(|| {
-				Ok(serde_json::from_reader(std::fs::File::open(file)?)?)
-			}).strict()?;
+			let spec = tracing::info_span!("parse_json")
+				.in_scope(|| Ok(serde_json::from_reader(std::fs::File::open(file)?)?))
+				.strict()?;
 			let output = match spec {
 				Spec::Itc(spec) => itc::create(args, spec, output)?,
 			};
@@ -177,9 +172,9 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 
 fn effective_input_file(file: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
 	if file.is_dir() {
-		let files = file.read_dir_utf8()?
-			.collect::<Result<Vec<_>, _>>()?;
-		let files = files.iter()
+		let files = file.read_dir_utf8()?.collect::<Result<Vec<_>, _>>()?;
+		let files = files
+			.iter()
 			.map(|f| f.path())
 			.filter(|f| f.is_file())
 			.filter(|f| f.extension() == Some("json"))
@@ -196,7 +191,11 @@ fn effective_input_file(file: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
 	}
 }
 
-fn from_itp(args: &Args, itp: &cradle::itp::Itp, output: util::Output) -> eyre::Result<Utf8PathBuf> {
+fn from_itp(
+	args: &Args,
+	itp: &cradle::itp::Itp,
+	output: util::Output,
+) -> eyre::Result<Utf8PathBuf> {
 	if args.dds {
 		let output = output.with_extension("dds");
 		let f = std::fs::File::create(&output)?;
@@ -215,25 +214,21 @@ fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
 	let data = match path.extension() {
 		Some("png") => {
 			let data = std::fs::File::open(path)?;
-			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
-				itp_png::png_to_itp(args, &itp_png::read_png(args, &data)?)
-			})?;
+			let mut itp = tracing::info_span!("parse_png")
+				.in_scope(|| itp_png::png_to_itp(args, &itp_png::read_png(args, &data)?))?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
 
 		Some("dds") => {
 			let data = std::fs::File::open(path)?;
-			let mut itp = tracing::info_span!("parse_dds").in_scope(|| {
-				itp_dds::dds_to_itp(args, &data)
-			})?;
+			let mut itp =
+				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
 
-		Some("itp") => {
-			std::fs::read(path)?
-		}
+		Some("itp") => std::fs::read(path)?,
 
 		_ => eyre::bail!("unknown file extension"),
 	};
@@ -255,6 +250,6 @@ fn guess_itp_revision(args: &Args, itp: &mut cradle::itp::Itp) {
 			cradle::itp::ImageData::Bc2(_) => IR::V2,
 			cradle::itp::ImageData::Bc3(_) => IR::V2,
 			cradle::itp::ImageData::Bc7(_) => IR::V3,
-		}
+		},
 	}
 }

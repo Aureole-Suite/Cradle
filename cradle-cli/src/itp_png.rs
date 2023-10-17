@@ -1,6 +1,6 @@
-use std::io::{Write, Read};
+use std::io::{Read, Write};
 
-use cradle::itp::{Itp, ImageData, Palette, mipmaps};
+use cradle::itp::{mipmaps, ImageData, Itp, ItpRevision, Palette};
 
 use crate::Args;
 
@@ -21,13 +21,22 @@ impl std::fmt::Debug for PngImageData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Argb32(data) => f.debug_tuple("Argb32").field(&data.len()).finish(),
-			Self::Indexed(pal, data) => f.debug_tuple("Indexed").field(pal).field(&data.len()).finish(),
+			Self::Indexed(pal, data) => f
+				.debug_tuple("Indexed")
+				.field(pal)
+				.field(&data.len())
+				.finish(),
 		}
 	}
 }
 
 pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<Png> {
-	let Itp { status: _, width, height, ref data } = *itp;
+	let Itp {
+		status: _,
+		width,
+		height,
+		ref data,
+	} = *itp;
 	let data = match data {
 		ImageData::Indexed(pal, data) => {
 			let pal = match pal {
@@ -39,46 +48,44 @@ pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<Png> {
 			} else {
 				PngImageData::Indexed(pal.clone(), data.clone())
 			}
-		},
+		}
 		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
 		ImageData::Argb32(data) => PngImageData::Argb32(data.clone()),
-		ImageData::Bc1(data) => PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc1)),
-		ImageData::Bc2(data) => PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc2)),
-		ImageData::Bc3(data) => PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc3)),
-		ImageData::Bc7(data) => PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc7)),
+		ImageData::Bc1(data) => {
+			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc1))
+		}
+		ImageData::Bc2(data) => {
+			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc2))
+		}
+		ImageData::Bc3(data) => {
+			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc3))
+		}
+		ImageData::Bc7(data) => {
+			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc7))
+		}
 	};
-	Ok(Png { width, height, data })
+	Ok(Png {
+		width,
+		height,
+		data,
+	})
 }
 
-fn decode<T: Copy>(
-	width: u32,
-	height: u32,
-	data: &[T],
-	f: impl FnMut(T) -> [u32; 16],
-) -> Vec<u32> {
+fn decode<T: Copy>(width: u32, height: u32, data: &[T], f: impl FnMut(T) -> [u32; 16]) -> Vec<u32> {
 	let mut data = data.iter().copied().flat_map(f).collect::<Vec<_>>();
 	for (w, h, range) in mipmaps(width, height, data.len()) {
-		cradle::permute::unswizzle(
-			&mut data[range],
-			h as usize,
-			w as usize,
-			4,
-			4,
-		);
+		cradle::permute::unswizzle(&mut data[range], h as usize, w as usize, 4, 4);
 	}
 	data
 }
 
-pub fn write_png(
-	args: &Args,
-	w: impl Write,
-	img: &Png,
-) -> eyre::Result<()> {
+pub fn write_png(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 	let mut png = png::Encoder::new(w, img.width, img.height);
 	let _data;
 	let (data, bpp) = match &img.data {
 		PngImageData::Argb32(data) => {
-			_data = data.iter()
+			_data = data
+				.iter()
 				.flat_map(|argb| {
 					let [b, g, r, a] = argb.to_le_bytes();
 					[r, g, b, a]
@@ -89,7 +96,7 @@ pub fn write_png(
 			(&_data, 4)
 		}
 		PngImageData::Indexed(palette, data) => {
-			let mut pal = Vec::with_capacity(3*palette.len());
+			let mut pal = Vec::with_capacity(3 * palette.len());
 			let mut alp = Vec::with_capacity(palette.len());
 			for rgba in palette {
 				let [r, g, b, a] = u32::to_le_bytes(*rgba);
@@ -118,10 +125,10 @@ pub fn write_png(
 		if !std::mem::take(&mut first) {
 			png.set_frame_dimension(w, h)?;
 		}
-		png.write_image_data(&data[range.start*bpp .. range.end*bpp])?;
+		png.write_image_data(&data[range.start * bpp..range.end * bpp])?;
 		if nmips > 1 && !args.png_mipmap {
 			tracing::warn!("discarding mipmaps");
-			break
+			break;
 		}
 	}
 	png.finish()?;
@@ -129,27 +136,38 @@ pub fn write_png(
 }
 
 pub fn png_to_itp(args: &Args, png: &Png) -> eyre::Result<Itp> {
-	let Png { width, height, ref data } = *png;
+	let Png {
+		width,
+		height,
+		ref data,
+	} = *png;
 	let data = match data {
-		PngImageData::Argb32(data) =>
-			ImageData::Argb32(data.clone()),
-		PngImageData::Indexed(pal, data) if args.png_no_palette =>
-			ImageData::Argb32(data.iter().map(|i| *pal.get(*i as usize).unwrap_or(&0)).collect()),
-		PngImageData::Indexed(pal, data) =>
+		PngImageData::Argb32(data) => ImageData::Argb32(data.clone()),
+		PngImageData::Indexed(pal, data) if args.png_no_palette => ImageData::Argb32(
+			data.iter()
+				.map(|i| *pal.get(*i as usize).unwrap_or(&0))
+				.collect(),
+		),
+		PngImageData::Indexed(pal, data) => {
 			ImageData::Indexed(Palette::Embedded(pal.clone()), data.clone())
+		}
 	};
-	Ok(Itp::new(cradle::itp::ItpRevision::V3, width, height, data))
+	Ok(Itp::new(ItpRevision::V3, width, height, data))
 }
 
 pub fn read_png(args: &Args, f: impl Read) -> eyre::Result<Png> {
 	let png = png::Decoder::new(f).read_info()?;
-	eyre::ensure!(png.info().bit_depth == png::BitDepth::Eight, "only 8-bit png is supported");
+	eyre::ensure!(
+		png.info().bit_depth == png::BitDepth::Eight,
+		"only 8-bit png is supported"
+	);
 
 	let width = png.info().width;
 	let height = png.info().height;
 
 	let pal = png.info().palette.as_ref().map(|pal| {
-		let mut pal = pal.array_chunks()
+		let mut pal = pal
+			.array_chunks()
 			.map(|&[r, g, b]| u32::from_le_bytes([r, g, b, 0xFF]))
 			.collect::<Vec<_>>();
 		if let Some(trns) = &png.info().trns {
@@ -161,21 +179,31 @@ pub fn read_png(args: &Args, f: impl Read) -> eyre::Result<Png> {
 	});
 
 	let data = match png.info().color_type {
-		png::ColorType::Indexed if !args.png_no_palette =>
-			PngImageData::Indexed(pal.unwrap(), read_frames(args, png, |[a]| a)?),
-		png::ColorType::Indexed =>
-			PngImageData::Argb32(read_frames(args, png, |[i]| *pal.as_ref().unwrap().get(i as usize).unwrap_or(&0))?),
-		png::ColorType::Grayscale =>
-			PngImageData::Argb32(read_frames(args, png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?),
-		png::ColorType::GrayscaleAlpha =>
-			PngImageData::Argb32(read_frames(args, png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?),
-		png::ColorType::Rgb =>
-			PngImageData::Argb32(read_frames(args, png, |[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))?),
-		png::ColorType::Rgba =>
-			PngImageData::Argb32(read_frames(args, png, |[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))?),
+		png::ColorType::Indexed if !args.png_no_palette => {
+			PngImageData::Indexed(pal.unwrap(), read_frames(args, png, |[a]| a)?)
+		}
+		png::ColorType::Indexed => PngImageData::Argb32(read_frames(args, png, |[i]| {
+			*pal.as_ref().unwrap().get(i as usize).unwrap_or(&0)
+		})?),
+		png::ColorType::Grayscale => PngImageData::Argb32(read_frames(args, png, |[k]| {
+			u32::from_le_bytes([k, k, k, 0xFF])
+		})?),
+		png::ColorType::GrayscaleAlpha => PngImageData::Argb32(read_frames(args, png, |[k, a]| {
+			u32::from_le_bytes([k, k, k, a])
+		})?),
+		png::ColorType::Rgb => PngImageData::Argb32(read_frames(args, png, |[r, g, b]| {
+			u32::from_le_bytes([b, g, r, 0xFF])
+		})?),
+		png::ColorType::Rgba => PngImageData::Argb32(read_frames(args, png, |[r, g, b, a]| {
+			u32::from_le_bytes([b, g, r, a])
+		})?),
 	};
 
-	Ok(Png { width, height, data })
+	Ok(Png {
+		width,
+		height,
+		data,
+	})
 }
 
 fn read_frames<R: Read, T, const N: usize>(
@@ -189,15 +217,19 @@ fn read_frames<R: Read, T, const N: usize>(
 	for n in 0..n_frames {
 		if n > 1 && !args.png_mipmap {
 			tracing::warn!("discarding mipmaps");
-			break
+			break;
 		}
 		let frame = png.next_frame(&mut buf)?;
 		eyre::ensure!(frame.width == png.info().width >> n, "invalid frame width");
-		eyre::ensure!(frame.height == png.info().height >> n, "invalid frame height");
+		eyre::ensure!(
+			frame.height == png.info().height >> n,
+			"invalid frame height"
+		);
 		out.extend(
-			buf[..frame.buffer_size()].array_chunks()
-			.copied()
-			.map(&mut sample)
+			buf[..frame.buffer_size()]
+				.array_chunks()
+				.copied()
+				.map(&mut sample),
 		)
 	}
 	Ok(out)

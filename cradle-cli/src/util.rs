@@ -1,6 +1,6 @@
-use std::io::{Write, self};
+use std::io::{self, Write};
 
-use camino::{Utf8PathBuf, Utf8Path};
+use camino::{Utf8Path, Utf8PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Output {
@@ -23,7 +23,11 @@ impl Output {
 		}
 	}
 
-	pub fn from_output_flag(output: Option<impl AsRef<Utf8Path>>, file: impl AsRef<Utf8Path>, n_inputs: usize) -> eyre::Result<Self> {
+	pub fn from_output_flag(
+		output: Option<impl AsRef<Utf8Path>>,
+		file: impl AsRef<Utf8Path>,
+		n_inputs: usize,
+	) -> eyre::Result<Self> {
 		let output = output.as_ref().map(|a| a.as_ref());
 		let file = file.as_ref();
 		let dir = if let Some(output) = output {
@@ -31,15 +35,18 @@ impl Output {
 				if let Some(parent) = output.parent() {
 					std::fs::create_dir_all(parent)?;
 				}
-				return Ok(Output::At(output.to_path_buf()))
+				return Ok(Output::At(output.to_path_buf()));
 			}
 
 			std::fs::create_dir_all(output)?;
 			output
 		} else {
-			file.parent().ok_or_else(|| eyre::eyre!("file has no parent"))?
+			file.parent()
+				.ok_or_else(|| eyre::eyre!("file has no parent"))?
 		};
-		let name = file.file_name().ok_or_else(|| eyre::eyre!("file has no name"))?;
+		let name = file
+			.file_name()
+			.ok_or_else(|| eyre::eyre!("file has no name"))?;
 		Ok(Output::In(dir.join(name)))
 	}
 }
@@ -110,7 +117,11 @@ impl serde_json::ser::Formatter for MyFormatter {
 	}
 
 	#[inline]
-	fn begin_array_value<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
+	fn begin_array_value<W: Write + ?Sized>(
+		&mut self,
+		writer: &mut W,
+		first: bool,
+	) -> io::Result<()> {
 		self.write_comma(writer, first)
 	}
 
@@ -131,7 +142,11 @@ impl serde_json::ser::Formatter for MyFormatter {
 	}
 
 	#[inline]
-	fn begin_object_key<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
+	fn begin_object_key<W: Write + ?Sized>(
+		&mut self,
+		writer: &mut W,
+		first: bool,
+	) -> io::Result<()> {
 		self.write_comma(writer, first)
 	}
 

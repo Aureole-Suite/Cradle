@@ -1,11 +1,10 @@
 use camino::Utf8PathBuf;
-use cradle::itp::{Itp, ImageData, Palette};
+use cradle::itp::{ImageData, Itp, Palette};
 use strict_result::Strict;
 
 use crate::{util::Output, Args};
 
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct FrameSpec {
 	frame: usize,
 	path: Utf8PathBuf,
@@ -15,11 +14,14 @@ struct FrameSpec {
 	scale: (f32, f32),
 }
 
-fn unit_scale() -> (f32, f32) { (1.0, 1.0) }
-fn is_unit_scale(a: &(f32, f32)) -> bool { *a == unit_scale() }
+fn unit_scale() -> (f32, f32) {
+	(1.0, 1.0)
+}
+fn is_unit_scale(a: &(f32, f32)) -> bool {
+	*a == unit_scale()
+}
 
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ItcSpec {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	palette: Option<Vec<u32>>,
@@ -39,7 +41,7 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 	for (i, frame) in itc.frames.iter().enumerate() {
 		let Some(itp) = &frame.itp else { continue };
 
-		let _span = tracing::info_span!("frame", i=i).entered();
+		let _span = tracing::info_span!("frame", i = i).entered();
 
 		let (w, h) = cradle::itp::read_size(itp)?;
 
@@ -53,11 +55,15 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 			std::fs::write(&frame_out, itp)?;
 			frame_out
 		} else {
-			let mut itp = tracing::info_span!("parse_itp").in_scope(|| {
-				Ok(cradle::itp::read(itp)?)
-			}).strict()?;
+			let mut itp = tracing::info_span!("parse_itp")
+				.in_scope(|| Ok(cradle::itp::read(itp)?))
+				.strict()?;
 
-			if let Itp { data: ImageData::Indexed(pal @ Palette::External(..), _), ..} = &mut itp {
+			if let Itp {
+				data: ImageData::Indexed(pal @ Palette::External(..), _),
+				..
+			} = &mut itp
+			{
 				if let Some(palette) = &itc.palette {
 					tracing::warn!("inlining palette");
 					*pal = Palette::Embedded(palette.clone())
@@ -84,14 +90,10 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 	}
 
 	frames.sort_by_key(|a| a.0);
-	crate::Spec::write(
-		&json_out,
-		crate::util::MyFormatter::new(2),
-		ItcSpec {
-			palette: itc.palette.as_ref().filter(|_| args.itp).cloned(),
-			frames: frames.into_iter().map(|a| a.1).collect(),
-		},
-	)?;
+	crate::Spec::write(&json_out, crate::util::MyFormatter::new(2), ItcSpec {
+		palette: itc.palette.as_ref().filter(|_| args.itp).cloned(),
+		frames: frames.into_iter().map(|a| a.1).collect(),
+	})?;
 
 	Ok(json_out)
 }

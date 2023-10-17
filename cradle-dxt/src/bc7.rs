@@ -6,11 +6,12 @@
 pub fn decode(block: u128) -> [u32; 16] {
 	let block = decode_block(block);
 	std::array::from_fn(|i| {
-		let [r, g, b, a] = block[i/4][i%4];
+		let [r, g, b, a] = block[i / 4][i % 4];
 		u32::from_le_bytes([b, g, r, a])
 	})
 }
 
+#[rustfmt::skip]
 #[inline]
 fn decode_block(block: u128) -> [[[u8; 4]; 4]; 4] {
 	match block.trailing_zeros() as usize {
@@ -39,20 +40,22 @@ fn get(bits: &mut u128, nbits: usize) -> u8 {
 #[inline(always)]
 fn decode_with_mode<
 	// Table 110. Full descriptions of the BPTC mode columns
-	const NS:  usize, // Number of subsets
-	const PB:  usize, // Partition selection bits
-	const RB:  usize, // Rotation bits
+	const NS: usize,  // Number of subsets
+	const PB: usize,  // Partition selection bits
+	const RB: usize,  // Rotation bits
 	const ISB: usize, // Index selection bit
-	const CB:  usize, // Color bits
-	const AB:  usize, // Alpha bits
+	const CB: usize,  // Color bits
+	const AB: usize,  // Alpha bits
 	const EPB: usize, // Endpoint P-bits (all channels)
 	const SPB: usize, // Shared P-bits
-	const IB:  usize, // Index bits
+	const IB: usize,  // Index bits
 	const IB2: usize, // Secondary index bits
->(bits: u128) -> [[[u8; 4]; 4]; 4] {
-	let bits = &mut {bits};
+>(
+	bits: u128,
+) -> [[[u8; 4]; 4]; 4] {
+	let bits = &mut { bits };
 	let partition = get(bits, PB) as usize;
-	let rotation  = get(bits, RB);
+	let rotation = get(bits, RB);
 	let index_sel = get(bits, ISB) != 0;
 
 	let endpoints = &mut [[[0; 4]; 2]; NS];
@@ -91,8 +94,8 @@ fn decode_with_mode<
 		}
 	}
 
-	let cbits = &mut {*bits};
-	let abits = &mut {*bits >> (16 * IB - NS)};
+	let cbits = &mut { *bits };
+	let abits = &mut { *bits >> (16 * IB - NS) };
 
 	let mut output = [[[0; 4]; 4]; 4];
 
@@ -108,11 +111,11 @@ fn decode_with_mode<
 					px[0] = interpolate::<IB2>(endp[0][0], endp[1][0], i1);
 					px[1] = interpolate::<IB2>(endp[0][1], endp[1][1], i1);
 					px[2] = interpolate::<IB2>(endp[0][2], endp[1][2], i1);
-					px[3] = interpolate::<IB >(endp[0][3], endp[1][3], i0);
+					px[3] = interpolate::<IB>(endp[0][3], endp[1][3], i0);
 				} else {
-					px[0] = interpolate::<IB >(endp[0][0], endp[1][0], i0);
-					px[1] = interpolate::<IB >(endp[0][1], endp[1][1], i0);
-					px[2] = interpolate::<IB >(endp[0][2], endp[1][2], i0);
+					px[0] = interpolate::<IB>(endp[0][0], endp[1][0], i0);
+					px[1] = interpolate::<IB>(endp[0][1], endp[1][1], i0);
+					px[2] = interpolate::<IB>(endp[0][2], endp[1][2], i0);
 					px[3] = interpolate::<IB2>(endp[0][3], endp[1][3], i1);
 				}
 			} else {
@@ -141,7 +144,8 @@ fn decode_with_mode<
 }
 
 fn subset_index<const NS: usize>(partition: usize, x: usize, y: usize) -> (usize, bool) {
-	// Table 114. Partition table for 2-subset BPTC, with the 4×4 block of values for each partition number
+	/// Table 114. Partition table for 2-subset BPTC, with the 4×4 block of values for each partition number
+	#[rustfmt::skip]
 	const P2: [[[u8; 4]; 4]; 64] = [
 		[[0, 0, 1, 1], [0, 0, 1, 1], [0, 0, 1, 1], [0, 0, 1, 1]],
 		[[0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1]],
@@ -209,6 +213,7 @@ fn subset_index<const NS: usize>(partition: usize, x: usize, y: usize) -> (usize
 		[[0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 1, 1], [0, 1, 1, 1]],
 	];
 	// Table 115. Partition table for 3-subset BPTC, with the 4×4 block of values for each partition number
+	#[rustfmt::skip]
 	const P3: [[[u8; 4]; 4]; 64] = [
 		[[0, 0, 1, 1], [0, 0, 1, 1], [0, 2, 2, 1], [2, 2, 2, 2]],
 		[[0, 0, 0, 1], [0, 0, 1, 1], [2, 2, 1, 1], [2, 2, 2, 1]],
@@ -277,6 +282,7 @@ fn subset_index<const NS: usize>(partition: usize, x: usize, y: usize) -> (usize
 	];
 
 	// Table 116. BPTC anchor index values for the second subset of three-subset partitioning, by partition number
+	#[rustfmt::skip]
 	const A3A: [u8; 64] = [
 		3,  3,  15, 15, 8,  3,  15, 15,
 		8,  8,  6,  6,  6,  5,  3,  3,
@@ -289,6 +295,7 @@ fn subset_index<const NS: usize>(partition: usize, x: usize, y: usize) -> (usize
 	];
 
 	// Table 117. BPTC anchor index values for the third subset of three-subset partitioning, by partition number
+	#[rustfmt::skip]
 	const A3B: [u8; 64] = [
 		15, 8,  8,  3,  15, 15, 3,  8,
 		15, 15, 15, 15, 15, 15, 15, 8,
@@ -301,6 +308,7 @@ fn subset_index<const NS: usize>(partition: usize, x: usize, y: usize) -> (usize
 	];
 
 	// Table 118. BPTC anchor index values for the second subset of two-subset partitioning, by partition number
+	#[rustfmt::skip]
 	const A2: [u8; 64] = [
 		15, 15, 15, 15, 15, 15, 15, 15,
 		15, 15, 15, 15, 15, 15, 15, 15,
@@ -331,6 +339,7 @@ fn subset_index<const NS: usize>(partition: usize, x: usize, y: usize) -> (usize
 }
 
 fn interpolate<const IB: usize>(e0: u8, e1: u8, i: usize) -> u8 {
+	#[rustfmt::skip]
 	let weight = match IB {
 		// Table 119. BPTC interpolation factors
 		2 => [       0,             21,             43,             64      ][i],

@@ -18,7 +18,7 @@ pub fn bc1(block: u64) -> [u32; 16] {
 			0x00000000,
 		]
 	};
-	std::array::from_fn(|i| colors[(bits >> (i*2)) as usize & 3])
+	std::array::from_fn(|i| colors[(bits >> (i * 2)) as usize & 3])
 }
 
 #[inline]
@@ -26,7 +26,7 @@ pub fn bc2(block: u128) -> [u32; 16] {
 	let bits = block as u64;
 	let bc1 = bc1((block >> 64) as u64);
 	std::array::from_fn(|i| {
-		let a = (bits >> (i*4)) & 0xF;
+		let a = (bits >> (i * 4)) & 0xF;
 		bc1[i] & 0xFFFFFF | ((a * 0x11) as u32) << 24
 	})
 }
@@ -62,22 +62,17 @@ pub fn bc3(block: u128) -> [u32; 16] {
 
 	let bc1 = bc1((block >> 64) as u64);
 	std::array::from_fn(|i| {
-		let a = (bits >> (i*3)) & 7;
+		let a = (bits >> (i * 3)) & 7;
 		bc1[i] & 0xFFFFFF | (alpha[a as usize] as u32) << 24
 	})
 }
 
 #[inline(always)]
 fn rgb565(block: u16) -> [u8; 4] {
-	let r = ((block >> 11)& 0b00011111) as u8;
+	let r = ((block >> 11) & 0b00011111) as u8;
 	let g = ((block >> 5) & 0b00111111) as u8;
-	let b = (block        & 0b00011111) as u8;
-	[
-		b << 3 | b >> 2,
-		g << 2 | g >> 4,
-		r << 3 | r >> 2,
-		0xFF
-	]
+	let b = (block & 0b00011111) as u8;
+	[b << 3 | b >> 2, g << 2 | g >> 4, r << 3 | r >> 2, 0xFF]
 }
 
 #[inline(always)]
@@ -88,5 +83,5 @@ fn lerp(c0: u16, c1: u16, p: u16, q: u16) -> u32 {
 }
 
 fn lerp1(a: u8, b: u8, p: u16, q: u16) -> u8 {
-	(((q-p) * (a as u16) + p * (b as u16)) / q) as u8
+	(((q - p) * (a as u16) + p * (b as u16)) / q) as u8
 }

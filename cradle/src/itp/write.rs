@@ -1,15 +1,18 @@
-use gospel::write::{Writer, Le as _, Label};
+use gospel::write::{Label, Le as _, Writer};
 use snafu::prelude::*;
 
 use crate::permute;
 
-use super::{Itp, ItpStatus, ImageData, Palette, abbr::*};
+use super::{abbr::*, ImageData, Itp, ItpStatus, Palette};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
 	#[allow(private_interfaces)]
 	#[snafu(context(false))]
-	Invalid { source: InnerError, backtrace: std::backtrace::Backtrace },
+	Invalid {
+		source: InnerError,
+		backtrace: std::backtrace::Backtrace,
+	},
 }
 
 #[derive(Debug, Snafu)]
@@ -37,7 +40,7 @@ enum InnerError {
 	AFastMode2Colors,
 
 	#[snafu(display("{what} is not yet implemented"))]
-	Todo { what: String }
+	Todo { what: String },
 }
 
 impl From<gospel::write::Error> for Error {
@@ -47,11 +50,18 @@ impl From<gospel::write::Error> for Error {
 }
 
 macro_rules! bail {
-	($e:expr) => { $e.fail::<!>()? }
+	($e:expr) => {
+		$e.fail::<!>()?
+	};
 }
 
 pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
-	let Itp { ref status, width, height, ref data } = *itp;
+	let Itp {
+		ref status,
+		width,
+		height,
+		ref data,
+	} = *itp;
 
 	let Some(head) = (match status.itp_revision {
 		IR::V1 => status_to_flags(status).and_then(flags_to_gen1),
@@ -94,7 +104,12 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 		f.append(body)
 	}
 
-	let Itp { ref status, width, height, ref data } = *itp;
+	let Itp {
+		ref status,
+		width,
+		height,
+		ref data,
+	} = *itp;
 
 	let start = Label::new();
 	let end = Label::new();
@@ -153,7 +168,8 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 		});
 	}
 
-	for (n, (width, height, range)) in super::mipmaps(width, height, data.pixel_count()).enumerate() {
+	for (n, (width, height, range)) in super::mipmaps(width, height, data.pixel_count()).enumerate()
+	{
 		chunk(&mut f, b"IDAT", {
 			let mut f = Writer::new();
 			f.u32(8);
@@ -196,7 +212,7 @@ pub fn status_to_flags(status: &ItpStatus) -> Option<u32> {
 		(BFT::Bc1, PBFT::Compressed) => bits!(24),
 		(BFT::Bc2, PBFT::Compressed) => bits!(25),
 		(BFT::Bc3, PBFT::Compressed) => bits!(26),
-		_ => return None
+		_ => return None,
 	}
 
 	if status.base_format != BFT::Indexed3 {
@@ -249,7 +265,11 @@ pub fn flags_to_gen1(flags: u32) -> Option<u32> {
 	})
 }
 
-fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bool, usize, Vec<u8>), Error> {
+fn write_ipal(
+	status: &ItpStatus,
+	pal: &Palette,
+	fixed_size: bool,
+) -> Result<(bool, usize, Vec<u8>), Error> {
 	match pal {
 		Palette::Embedded(pal) => {
 			let mut colors = pal.to_owned();
@@ -259,7 +279,7 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 			}
 			if status.base_format == BFT::Indexed2 {
 				for i in (1..colors.len()).rev() {
-					colors[i] = colors[i].wrapping_sub(colors[i-1])
+					colors[i] = colors[i].wrapping_sub(colors[i - 1])
 				}
 			}
 
@@ -272,35 +292,75 @@ fn write_ipal(status: &ItpStatus, pal: &Palette, fixed_size: bool) -> Result<(bo
 				f.u32(color);
 			}
 
-			Ok((false, pal.len(), maybe_compress(status.compression, &f.finish()?)))
-		},
-		Palette::External(path) => {
-			Ok((true, 0, path.to_bytes_with_nul().to_owned()))
-		},
+			Ok((
+				false,
+				pal.len(),
+				maybe_compress(status.compression, &f.finish()?),
+			))
+		}
+		Palette::External(path) => Ok((true, 0, path.to_bytes_with_nul().to_owned())),
 	}
 }
 
-fn write_idat(status: &ItpStatus, width: u32, height: u32, data: &ImageData, range: std::ops::Range<usize>) -> Result<Vec<u8>, Error> {
-	let bc_range = range.start/16 .. range.end/16;
+fn write_idat(
+	status: &ItpStatus,
+	width: u32,
+	height: u32,
+	data: &ImageData,
+	range: std::ops::Range<usize>,
+) -> Result<Vec<u8>, Error> {
+	let bc_range = range.start / 16..range.end / 16;
 	Ok(match data {
 		ImageData::Indexed(_, data) => match status.base_format {
-			BFT::Indexed1 => write_idat_simple(&data[range], status, width, height, u8::to_le_bytes),
+			BFT::Indexed1 => {
+				write_idat_simple(&data[range], status, width, height, u8::to_le_bytes)
+			}
 			BFT::Indexed2 => {
 				let data = a_fast_mode2(&data[range], width, height)?;
 				let mut f = Writer::new();
 				f.u32(data.len() as u32);
 				f.slice(&maybe_compress(status.compression, &data));
 				f.finish()?
-			},
-			BFT::Indexed3 => bail!(e::Todo { what: "CCPI is not supported for revision 3" }),
-			_ => unreachable!()
+			}
+			BFT::Indexed3 => bail!(e::Todo {
+				what: "CCPI is not supported for revision 3"
+			}),
+			_ => unreachable!(),
 		},
-		ImageData::Argb16(_, data) => write_idat_simple(&data[range], status, width, height, u16::to_le_bytes),
-		ImageData::Argb32(data) => write_idat_simple(&data[range], status, width, height, u32::to_le_bytes),
-		ImageData::Bc1(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u64::to_le_bytes),
-		ImageData::Bc2(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
-		ImageData::Bc3(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
-		ImageData::Bc7(data) => write_idat_simple(&data[bc_range], status, width / 4, height / 4, u128::to_le_bytes),
+		ImageData::Argb16(_, data) => {
+			write_idat_simple(&data[range], status, width, height, u16::to_le_bytes)
+		}
+		ImageData::Argb32(data) => {
+			write_idat_simple(&data[range], status, width, height, u32::to_le_bytes)
+		}
+		ImageData::Bc1(data) => write_idat_simple(
+			&data[bc_range],
+			status,
+			width / 4,
+			height / 4,
+			u64::to_le_bytes,
+		),
+		ImageData::Bc2(data) => write_idat_simple(
+			&data[bc_range],
+			status,
+			width / 4,
+			height / 4,
+			u128::to_le_bytes,
+		),
+		ImageData::Bc3(data) => write_idat_simple(
+			&data[bc_range],
+			status,
+			width / 4,
+			height / 4,
+			u128::to_le_bytes,
+		),
+		ImageData::Bc7(data) => write_idat_simple(
+			&data[bc_range],
+			status,
+			width / 4,
+			height / 4,
+			u128::to_le_bytes,
+		),
 	})
 }
 
@@ -311,20 +371,25 @@ fn write_idat_simple<T: Clone, const N: usize>(
 	height: u32,
 	to_le_bytes: fn(T) -> [u8; N],
 ) -> Vec<u8> {
-	let data = do_swizzle(data.to_vec(), width as usize, height as usize, status.pixel_format);
+	let data = do_swizzle(
+		data.to_vec(),
+		width as usize,
+		height as usize,
+		status.pixel_format,
+	);
 	let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
 	maybe_compress(status.compression, &data)
 }
 
 fn do_swizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
 	match pixel_format {
-		PFT::Linear => {},
+		PFT::Linear => {}
 		PFT::Pfp_1 => permute::swizzle(&mut data, height, width, 8, 16),
 		PFT::Pfp_2 => permute::swizzle(&mut data, height, width, 32, 32),
 		PFT::Pfp_3 => permute::morton(&mut data, height, width),
 		PFT::Pfp_4 => {
 			permute::swizzle(&mut data, height, width, 8, 1);
-			permute::morton(&mut data, width*height/8, 8);
+			permute::morton(&mut data, width * height / 8, 8);
 		}
 	}
 	data
@@ -335,7 +400,10 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 		bail!(e::CcpiMustBeIndexed)
 	};
 
-	ensure!(pixels.len() == itp.width as usize * itp.height as usize, e::CcpiMipmaps);
+	ensure!(
+		pixels.len() == itp.width as usize * itp.height as usize,
+		e::CcpiMipmaps
+	);
 
 	let mut status_copy = itp.status.clone();
 	status_copy.compression = CT::None;
@@ -348,7 +416,7 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	}
 
 	match itp.status.compression {
-		CT::None => {},
+		CT::None => {}
 		CT::Bz_1 => flags |= 1 << 15,
 		CT::Bz_2 | CT::C77 => bail!(e::CcpiCompression),
 	}
@@ -372,17 +440,17 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 }
 
 fn encode_ccpi(w: usize, h: usize, pixels: &[u8]) -> (usize, usize, Vec<u8>) {
-	// 16*32 pixels means 8*16 tiles, which is guaranteed to be less than 
+	// 16*32 pixels means 8*16 tiles, which is guaranteed to be less than
 	let cw = 16;
 	let ch = 32;
 	let mut out = Vec::new();
 	for y in (0..h).step_by(ch) {
 		for x in (0..w).step_by(cw) {
-			let cw = cw.min(w-x);
-			let ch = ch.min(h-y);
+			let cw = cw.min(w - x);
+			let ch = ch.min(h - y);
 			let mut chunk = Vec::new();
-			for y in y..y+ch {
-				for x in x..x+cw {
+			for y in y..y + ch {
+				for x in x..x + cw {
 					chunk.push(pixels[y * w + x]);
 				}
 			}
@@ -404,7 +472,7 @@ fn encode_ccpi_chunk(chunk: &[u8]) -> Vec<u8> {
 }
 
 fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> {
-	fn nibbles(f: &mut Writer, data: impl IntoIterator<Item=u8>) {
+	fn nibbles(f: &mut Writer, data: impl IntoIterator<Item = u8>) {
 		let mut iter = data.into_iter();
 		while let (Some(a), Some(b)) = (iter.next(), iter.next()) {
 			f.u8(a << 4 | b)
@@ -417,12 +485,17 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 	let mut out = Vec::new();
 	for chunk in data.array_chunks() {
 		let mut chunk_colors = Vec::new();
-		if chunk != &[0; 8*16] {
+		if chunk != &[0; 8 * 16] {
 			for &a in chunk {
-				out.push(chunk_colors.iter().position(|i| i == &a).unwrap_or_else(|| {
-					chunk_colors.push(a);
-					chunk_colors.len() - 1
-				}) as u8);
+				out.push(
+					chunk_colors
+						.iter()
+						.position(|i| i == &a)
+						.unwrap_or_else(|| {
+							chunk_colors.push(a);
+							chunk_colors.len() - 1
+						}) as u8,
+				);
 			}
 		}
 		if chunk_colors.len() == 1 {
@@ -435,7 +508,10 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 	}
 
 	let mut f = Writer::new();
-	nibbles(&mut f, colors.iter().map(|a| a.len().saturating_sub(1) as u8));
+	nibbles(
+		&mut f,
+		colors.iter().map(|a| a.len().saturating_sub(1) as u8),
+	);
 	for c in &colors {
 		f.slice(c);
 	}
