@@ -120,8 +120,12 @@ fn init_tracing() -> Result<(), eyre::Error> {
 	Ok(())
 }
 
-#[tracing::instrument(skip_all, fields(path=%file))]
-fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
+#[tracing::instrument(skip_all, fields(path=%raw_file))]
+fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
+	let file = &effective_input_file(raw_file)?;
+	if file != raw_file {
+		tracing::info!("using {file}");
+	}
 	let ext = file.extension().unwrap_or("");
 	let output = cli.output(file)?;
 	let args = &cli.args;
@@ -134,6 +138,7 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			let output = from_itp(args, &itp, output)?;
 			tracing::info!("wrote to {output}");
 		}
+
 		"dds" | "png" => {
 			let data = to_itp(args, file)?;
 			let output = output.with_extension("itp");
@@ -150,9 +155,41 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 			tracing::info!("wrote to {output}");
 		}
 
+		"json" => {
+			let output = cli.output(&file.with_extension(""))?; // to strip off the duplicate .ext.json suffix
+			let spec = tracing::info_span!("parse_json")
+				.in_scope(|| Ok(serde_json::from_reader(std::fs::File::open(file)?)?))
+				.strict()?;
+			let output = match spec {
+				Spec::Itc(spec) => itc::create(args, spec, output)?,
+			};
+			tracing::info!("wrote to {output}");
+		}
+
 		_ => eyre::bail!("unknown file extension"),
 	}
 	Ok(())
+}
+
+fn effective_input_file(file: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
+	if file.is_dir() {
+		let files = file.read_dir_utf8()?.collect::<Result<Vec<_>, _>>()?;
+		let files = files
+			.iter()
+			.map(|f| f.path())
+			.filter(|f| f.is_file())
+			.filter(|f| f.extension() == Some("json"))
+			.collect::<Vec<_>>();
+		match files.as_slice() {
+			[] => eyre::bail!("no json file in directory"),
+			[a] => Ok(a.to_path_buf()),
+			_ => eyre::bail!("multiple json files in directory"),
+		}
+	} else if file.exists() {
+		Ok(file.to_path_buf())
+	} else {
+		eyre::bail!("file doesn't exist")
+	}
 }
 
 fn from_itp(
