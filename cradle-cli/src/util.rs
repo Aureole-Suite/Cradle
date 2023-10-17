@@ -58,36 +58,60 @@ impl MyFormatter {
 			has_value: false,
 		}
 	}
-}
 
-impl serde_json::ser::Formatter for MyFormatter {
-	#[inline]
-	fn begin_array<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		self.level += 1;
-		self.has_value = false;
-		writer.write_all(b"[")
+	fn indent<W: Write + ?Sized>(&self, wr: &mut W, max_level: usize) -> io::Result<()> {
+		if self.level <= max_level {
+			wr.write_all(b"\n")?;
+			for _ in 0..self.level {
+				wr.write_all(b"\t")?;
+			}
+		} else {
+			wr.write_all(b" ")?;
+		}
+		Ok(())
 	}
 
-	#[inline]
-	fn end_array<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		if self.has_value {
-			indent(writer, self.level - 1, self.indent_to - 1)?;
-		}
+	fn write_begin<W: Write + ?Sized>(&mut self, writer: &mut W, delim: &[u8]) -> io::Result<()> {
+		self.level += 1;
+		self.has_value = false;
+		writer.write_all(delim)
+	}
+
+	fn write_end<W: Write + ?Sized>(&mut self, writer: &mut W, delim: &[u8]) -> io::Result<()> {
 		self.level -= 1;
-		writer.write_all(b"]")?;
+		if self.has_value {
+			self.indent(writer, self.indent_to - 1)?;
+		}
+		writer.write_all(delim)?;
 		if self.level == 0 {
 			writer.write_all(b"\n")?;
 		}
 		Ok(())
 	}
 
-	#[inline]
-	fn begin_array_value<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
+	fn write_comma<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
 		if !first {
 			writer.write_all(b",")?;
 		}
-		indent(writer, self.level, self.indent_to)?;
+		self.indent(writer, self.indent_to)?;
 		Ok(())
+	}
+}
+
+impl serde_json::ser::Formatter for MyFormatter {
+	#[inline]
+	fn begin_array<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
+		self.write_begin(writer, b"[")
+	}
+
+	#[inline]
+	fn end_array<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
+		self.write_end(writer, b"]")
+	}
+
+	#[inline]
+	fn begin_array_value<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
+		self.write_comma(writer, first)
 	}
 
 	#[inline]
@@ -98,31 +122,17 @@ impl serde_json::ser::Formatter for MyFormatter {
 
 	#[inline]
 	fn begin_object<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		self.level += 1;
-		self.has_value = false;
-		writer.write_all(b"{")
+		self.write_begin(writer, b"{")
 	}
 
 	#[inline]
 	fn end_object<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		if self.has_value {
-			indent(writer, self.level - 1, self.indent_to - 1)?;
-		}
-		self.level -= 1;
-		writer.write_all(b"}")?;
-		if self.level == 0 {
-			writer.write_all(b"\n")?;
-		}
-		Ok(())
+		self.write_end(writer, b"}")
 	}
 
 	#[inline]
 	fn begin_object_key<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
-		if !first {
-			writer.write_all(b",")?;
-		}
-		indent(writer, self.level, self.indent_to)?;
-		Ok(())
+		self.write_comma(writer, first)
 	}
 
 	#[inline]
@@ -135,16 +145,4 @@ impl serde_json::ser::Formatter for MyFormatter {
 		self.has_value = true;
 		Ok(())
 	}
-}
-
-fn indent<W: Write + ?Sized>(wr: &mut W, n: usize, m: usize) -> io::Result<()> {
-	if n <= m {
-		wr.write_all(b"\n")?;
-		for _ in 0..n {
-			wr.write_all(b"\t")?;
-		}
-	} else {
-		wr.write_all(b" ")?;
-	}
-	Ok(())
 }
