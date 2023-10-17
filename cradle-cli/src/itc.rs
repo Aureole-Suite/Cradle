@@ -29,10 +29,10 @@ pub struct ItcSpec {
 pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Result<Utf8PathBuf> {
 	let outdir = output.with_extension("");
 	let json_out = if args.no_dir {
-		output.with_extension("json")
+		output.with_extension("itc.json")
 	} else {
 		std::fs::create_dir_all(&outdir)?;
-		outdir.join("chip.json")
+		outdir.join("cradle.itc.json")
 	};
 
 	let mut frames = Vec::new();
