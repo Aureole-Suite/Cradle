@@ -91,8 +91,8 @@ pub fn write_png(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 		PngImageData::Indexed(palette, data) => {
 			let mut pal = Vec::with_capacity(3 * palette.len());
 			let mut alp = Vec::with_capacity(palette.len());
-			for rgba in palette {
-				let [r, g, b, a] = u32::to_le_bytes(*rgba);
+			for argb in palette {
+				let [b, g, r, a] = u32::to_le_bytes(*argb);
 				pal.push(r);
 				pal.push(g);
 				pal.push(b);
@@ -161,7 +161,7 @@ pub fn read_png(args: &Args, f: impl Read) -> eyre::Result<Png> {
 	let pal = png.info().palette.as_ref().map(|pal| {
 		let mut pal = pal
 			.array_chunks()
-			.map(|&[r, g, b]| u32::from_le_bytes([r, g, b, 0xFF]))
+			.map(|&[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))
 			.collect::<Vec<_>>();
 		if let Some(trns) = &png.info().trns {
 			for (rgb, a) in pal.iter_mut().zip(trns.iter()) {
