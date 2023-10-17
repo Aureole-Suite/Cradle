@@ -74,7 +74,7 @@ impl Cli {
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(derive_more::From)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all="snake_case")]
 enum Spec {
 	Itc(itc::ItcSpec)
 }
