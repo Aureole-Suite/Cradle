@@ -155,5 +155,7 @@ fn test_itp_roundtrips(path: &Utf8Path, bytes: &[u8]) -> Result<(), eyre::Error>
 	let file = std::fs::File::open(tmpdir.path().join("cradle.itc.json"))?;
 	let itc2 = create(args, serde_json::from_reader(file)?, tmpdir.path())?;
 	assert_eq!(itc, itc2);
+	let bytes2 = cradle::itc::write(&itc2)?;
+	assert_eq!(bytes, bytes2);
 	Ok(())
 }
