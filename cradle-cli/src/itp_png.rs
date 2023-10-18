@@ -44,7 +44,7 @@ fn decode<T: Copy>(width: u32, height: u32, data: &[T], f: impl FnMut(T) -> [u32
 	data
 }
 
-pub fn png_to_itp(args: &Args, png: &png::Png) -> eyre::Result<Itp> {
+pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
 	let png::Png {
 		width,
 		height,
@@ -61,7 +61,7 @@ pub fn png_to_itp(args: &Args, png: &png::Png) -> eyre::Result<Itp> {
 			ImageData::Indexed(Palette::Embedded(pal.clone()), data.clone())
 		}
 	};
-	Ok(Itp::new(ItpRevision::V3, width, height, data))
+	Itp::new(ItpRevision::V3, width, height, data)
 }
 
 #[cfg(test)]
@@ -71,7 +71,7 @@ fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
 	use std::io::Cursor;
 	let itp = cradle::itp::read(bytes)?;
 	let png = itp_to_png(args, &itp)?;
-	let itp2 = png_to_itp(args, &png)?;
+	let itp2 = png_to_itp(args, &png);
 	let png2 = itp_to_png(args, &itp2)?;
 	assert_eq!(png, png2);
 
