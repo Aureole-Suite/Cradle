@@ -103,7 +103,9 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 				let mut png = crate::itp_png::itp_to_png(args, &itp)?;
 				if !args.itc_no_pad {
 					let _span = tracing::info_span!("pad").entered();
-					if (xo - xo.round()).abs() < f32::EPSILON && (yo - yo.round()).abs() < f32::EPSILON {
+					if (xo - xo.round()).abs() < f32::EPSILON
+						&& (yo - yo.round()).abs() < f32::EPSILON
+					{
 						png = pad(png, -xo.round() as i32, -yo.round() as i32, maxw, maxh);
 						offset = None;
 					}
