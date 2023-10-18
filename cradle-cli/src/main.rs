@@ -156,12 +156,23 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 		}
 
 		"json" => {
-			let output = cli.output(&file.with_extension(""))?; // to strip off the duplicate .ext.json suffix
+			let output = if file == raw_file {
+				// to strip off the duplicate .ext.json suffix
+				cli.output(&raw_file.with_extension(""))?
+			} else {
+				// but if it's a dir, there's no such suffix
+				cli.output(raw_file)?
+			};
 			let spec = tracing::info_span!("parse_json")
 				.in_scope(|| Ok(serde_json::from_reader(std::fs::File::open(file)?)?))
 				.strict()?;
 			let output = match spec {
-				Spec::Itc(spec) => itc::create(args, spec, output)?,
+				Spec::Itc(spec) => {
+					let itc = itc::create(args, spec, file.parent().unwrap())?;
+					let output = output.with_extension("itc");
+					std::fs::write(&output, cradle::itc::write(&itc)?)?;
+					output
+				}
 			};
 			tracing::info!("wrote to {output}");
 		}

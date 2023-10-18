@@ -26,4 +26,5 @@ serde_json = "1.0.95"
 derive_more = "0.99.17"
 
 [dev-dependencies]
-filetest = "0.1.1"
+filetest = "0.1.2"
+camino-tempfile = "1.0.2"

@@ -1,5 +1,5 @@
-use camino::Utf8PathBuf;
-use cradle::itp::{ImageData, Itp, Palette};
+use camino::{Utf8Path, Utf8PathBuf};
+use cradle::itp::{ImageData, Palette};
 use strict_result::Strict;
 
 use crate::{util::Output, Args};
@@ -98,10 +98,62 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 		},
 	)?;
 
-	Ok(json_out)
+	if args.no_dir {
+		Ok(json_out)
+	} else {
+		Ok(outdir)
+	}
 }
 
-pub fn create(args: &Args, spec: ItcSpec, output: Output) -> eyre::Result<Utf8PathBuf> {
-	println!("{:?}", spec);
-	eyre::bail!("foo")
+pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle::itc::Itc> {
+	let mut itc = cradle::itc::Itc {
+		palette: spec.palette,
+		..Default::default()
+	};
+	for (order, spec) in spec.frames.iter().enumerate() {
+		let _span = tracing::info_span!("frame", i = spec.frame).entered();
+		let Some(frame) = itc.frames.get_mut(spec.frame) else {
+			eyre::bail!("invalid frame number");
+		};
+		if frame.itp.is_some() {
+			eyre::bail!("duplicate frame number");
+		}
+		let itp = crate::to_itp(args, &dir.join(&spec.path))?;
+		let (w, h) = cradle::itp::read_size(&itp)?;
+
+		let offset = if let Some((x, y)) = spec.offset {
+			(x / w as f32, y / h as f32)
+		} else {
+			(0., 0.)
+		};
+
+		*frame = cradle::itc::Frame {
+			itp: Some(itp),
+			unknown: 0,
+			offset,
+			scale: spec.scale,
+			order,
+		};
+	}
+	Ok(itc)
+}
+
+#[cfg(test)]
+#[filetest::filetest("../../samples/itc/*.itc")]
+fn test_itp_roundtrips(path: &Utf8Path, bytes: &[u8]) -> Result<(), eyre::Error> {
+	let tmpdir = camino_tempfile::Builder::new()
+		.prefix("cradle-")
+		.suffix(&format!("-{}", path.file_stem().unwrap()))
+		.tempdir()?;
+	let args = &Args {
+		itp: true,
+		..Args::default()
+	};
+
+	let itc = cradle::itc::read(bytes)?;
+	extract(args, &itc, Output::At(tmpdir.path().to_path_buf()))?;
+	let file = std::fs::File::open(tmpdir.path().join("cradle.itc.json"))?;
+	let itc2 = create(args, serde_json::from_reader(file)?, tmpdir.path())?;
+	assert_eq!(itc, itc2);
+	Ok(())
 }
