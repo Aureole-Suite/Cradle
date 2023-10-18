@@ -64,6 +64,12 @@ struct Args {
 	/// - revision 3 for BC7-encoded images.
 	#[clap(long, value_parser = 1..=3, verbatim_doc_comment)]
 	itp_revision: Option<u16>,
+
+	/// Do not pad/crop the frames to equal size
+	///
+	/// Only supported in png; --itp and --dds invalidate this.
+	#[clap(long)]
+	itc_no_pad: bool,
 }
 
 impl Cli {
