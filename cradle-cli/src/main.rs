@@ -132,7 +132,8 @@ fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
 		Some("png") => {
 			let data = std::fs::File::open(path)?;
 			let mut itp = tracing::info_span!("parse_png")
-				.in_scope(|| itp_png::png_to_itp(args, &png::read(args, &data)?))?;
+				.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(args, &data)?)))
+				.strict()?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
