@@ -78,85 +78,77 @@ impl MyFormatter {
 		Ok(())
 	}
 
-	fn write_begin<W: Write + ?Sized>(&mut self, writer: &mut W, delim: &[u8]) -> io::Result<()> {
+	fn write_begin<W: Write + ?Sized>(&mut self, w: &mut W, delim: &[u8]) -> io::Result<()> {
 		self.level += 1;
 		self.has_value = false;
-		writer.write_all(delim)
+		w.write_all(delim)
 	}
 
-	fn write_end<W: Write + ?Sized>(&mut self, writer: &mut W, delim: &[u8]) -> io::Result<()> {
+	fn write_end<W: Write + ?Sized>(&mut self, w: &mut W, delim: &[u8]) -> io::Result<()> {
 		self.level -= 1;
 		if self.has_value {
-			self.indent(writer, self.indent_to - 1)?;
+			self.indent(w, self.indent_to - 1)?;
 		}
-		writer.write_all(delim)?;
+		w.write_all(delim)?;
 		if self.level == 0 {
-			writer.write_all(b"\n")?;
+			w.write_all(b"\n")?;
 		}
 		Ok(())
 	}
 
-	fn write_comma<W: Write + ?Sized>(&mut self, writer: &mut W, first: bool) -> io::Result<()> {
+	fn write_comma<W: Write + ?Sized>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
 		if !first {
-			writer.write_all(b",")?;
+			w.write_all(b",")?;
 		}
-		self.indent(writer, self.indent_to)?;
+		self.indent(w, self.indent_to)?;
 		Ok(())
 	}
 }
 
 impl serde_json::ser::Formatter for MyFormatter {
 	#[inline]
-	fn begin_array<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		self.write_begin(writer, b"[")
+	fn begin_array<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_begin(w, b"[")
 	}
 
 	#[inline]
-	fn end_array<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		self.write_end(writer, b"]")
+	fn end_array<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_end(w, b"]")
 	}
 
 	#[inline]
-	fn begin_array_value<W: Write + ?Sized>(
-		&mut self,
-		writer: &mut W,
-		first: bool,
-	) -> io::Result<()> {
-		self.write_comma(writer, first)
+	fn begin_array_value<W: Write + ?Sized>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+		self.write_comma(w, first)
 	}
 
 	#[inline]
-	fn end_array_value<W: Write + ?Sized>(&mut self, _writer: &mut W) -> io::Result<()> {
+	fn end_array_value<W: Write + ?Sized>(&mut self, _w: &mut W) -> io::Result<()> {
 		self.has_value = true;
 		Ok(())
 	}
 
 	#[inline]
-	fn begin_object<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		self.write_begin(writer, b"{")
+	fn begin_object<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_begin(w, b"{")
 	}
 
 	#[inline]
-	fn end_object<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		self.write_end(writer, b"}")
+	fn end_object<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_end(w, b"}")
 	}
 
 	#[inline]
-	fn begin_object_key<W: Write + ?Sized>(
-		&mut self,
-		writer: &mut W,
-		first: bool,
-	) -> io::Result<()> {
-		self.write_comma(writer, first)
+	fn begin_object_key<W: Write + ?Sized>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+		self.write_comma(w, first)
 	}
 
 	#[inline]
-	fn begin_object_value<W: Write + ?Sized>(&mut self, writer: &mut W) -> io::Result<()> {
-		writer.write_all(b": ")
+	fn begin_object_value<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		w.write_all(b": ")
 	}
 
 	#[inline]
-	fn end_object_value<W: Write + ?Sized>(&mut self, _writer: &mut W) -> io::Result<()> {
+	fn end_object_value<W: Write + ?Sized>(&mut self, _w: &mut W) -> io::Result<()> {
 		self.has_value = true;
 		Ok(())
 	}
