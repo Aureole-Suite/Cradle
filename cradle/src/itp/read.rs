@@ -497,6 +497,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 		CT::None
 	};
 	let data = read_maybe_compressed(f, compression, data_size - 16)?;
+	status.compression = CT::None;
 	let f = &mut Reader::new(&data);
 
 	let pal = read_ipal(f, &status, flags & (1 << 9) != 0, pal_size)?;
