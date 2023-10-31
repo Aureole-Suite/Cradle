@@ -43,7 +43,7 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 				.collect::<Vec<_>>();
 			png.set_color(png::ColorType::Rgba);
 			png.set_depth(png::BitDepth::Eight);
-			write_data(img, &data, 4, args, png)?;
+			write_data(img, &data, 4, args, png)
 		}
 		ImageData::Indexed(palette, data) => {
 			let mut pal = Vec::with_capacity(3 * palette.len());
@@ -59,11 +59,9 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 			png.set_depth(png::BitDepth::Eight);
 			png.set_palette(pal);
 			png.set_trns(alp);
-			write_data(img, data, 1, args, png)?;
+			write_data(img, data, 1, args, png)
 		}
-	};
-
-	Ok(())
+	}
 }
 
 fn write_data(
