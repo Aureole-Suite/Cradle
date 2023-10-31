@@ -18,13 +18,13 @@ pub struct Itp {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ImageData {
-	Indexed(Palette, Vec<u8>),
-	Argb16(Argb16Mode, Vec<u16>),
-	Argb32(Vec<u32>),
-	Bc1(Vec<u64>),
-	Bc2(Vec<u128>),
-	Bc3(Vec<u128>),
-	Bc7(Vec<u128>),
+	Indexed(Palette, Vec<Raster<u8>>),
+	Argb16(Argb16Mode, Vec<Raster<u16>>),
+	Argb32(Vec<Raster<u32>>),
+	Bc1(Vec<Raster<u64>>),
+	Bc2(Vec<Raster<u128>>),
+	Bc3(Vec<Raster<u128>>),
+	Bc7(Vec<Raster<u128>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,6 +166,8 @@ pub mod abbr {
 
 use abbr::*;
 
+use crate::raster::Raster;
+
 pub fn read(f: &[u8]) -> Result<Itp, read::Error> {
 	read::read(&mut Reader::new(f))
 }
@@ -195,7 +197,6 @@ impl Itp {
 			ImageData::Bc3(_) => (BFT::Bc3, PBFT::Compressed),
 			ImageData::Bc7(_) => (BFT::Bc7, PBFT::Compressed),
 		};
-		let nmip = mipmaps(width, height, data.pixel_count()).count();
 		Itp {
 			status: ItpStatus {
 				itp_revision,
@@ -204,7 +205,11 @@ impl Itp {
 				pixel_format: PFT::Linear,
 				pixel_bit_format,
 				multi_plane: MPT::None,
-				mipmap: if nmip > 1 { MT::Mipmap_1 } else { MT::None },
+				mipmap: if data.mipmaps() > 1 {
+					MT::Mipmap_1
+				} else {
+					MT::None
+				},
 				use_alpha: None,
 			},
 			width,
@@ -215,37 +220,17 @@ impl Itp {
 }
 
 impl ImageData {
-	pub fn pixel_count(&self) -> usize {
+	pub fn mipmaps(&self) -> usize {
 		match self {
 			ImageData::Indexed(_, d) => d.len(),
 			ImageData::Argb16(_, d) => d.len(),
 			ImageData::Argb32(d) => d.len(),
-			ImageData::Bc1(d) => d.len() * 16,
-			ImageData::Bc2(d) => d.len() * 16,
-			ImageData::Bc3(d) => d.len() * 16,
-			ImageData::Bc7(d) => d.len() * 16,
+			ImageData::Bc1(d) => d.len(),
+			ImageData::Bc2(d) => d.len(),
+			ImageData::Bc3(d) => d.len(),
+			ImageData::Bc7(d) => d.len(),
 		}
 	}
-}
-
-pub fn mipmaps(
-	mut width: u32,
-	mut height: u32,
-	len: usize,
-) -> impl Iterator<Item = (u32, u32, std::ops::Range<usize>)> {
-	let mut pos = 0;
-	std::iter::from_fn(move || {
-		let size = (width * height) as usize;
-		if size == 0 || pos + size > len {
-			None
-		} else {
-			let val = (width, height, pos..pos + size);
-			pos += size;
-			width >>= 1;
-			height >>= 1;
-			Some(val)
-		}
-	})
 }
 
 #[cfg(test)]

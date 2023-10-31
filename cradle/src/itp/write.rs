@@ -1,7 +1,7 @@
 use gospel::write::{Label, Le as _, Writer};
 use snafu::prelude::*;
 
-use crate::permute;
+use crate::{permute, raster::Raster};
 
 use super::{abbr::*, ImageData, Itp, ItpStatus, Palette};
 
@@ -90,8 +90,8 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 			f.slice(&pal);
 		}
 
-		for (width, height, range) in super::mipmaps(width, height, data.pixel_count()) {
-			f.slice(&write_idat(status, width, height, data, range)?);
+		for level in 0..data.mipmaps() {
+			f.slice(&write_idat(status, data, level)?);
 		}
 	}
 	Ok(f.finish()?)
@@ -136,10 +136,9 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 
 	chunk(&mut f, b"IMIP", {
 		let mut f = Writer::new();
-		let nmip = super::mipmaps(width, height, data.pixel_count()).count();
 		f.u32(12);
 		f.u16(status.mipmap as u16);
-		f.u16((nmip - 1) as u16);
+		f.u16((data.mipmaps() - 1) as u16);
 		f.u32(0);
 		f
 	});
@@ -168,14 +167,13 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 		});
 	}
 
-	for (n, (width, height, range)) in super::mipmaps(width, height, data.pixel_count()).enumerate()
-	{
+	for n in 0..data.mipmaps() {
 		chunk(&mut f, b"IDAT", {
 			let mut f = Writer::new();
 			f.u32(8);
 			f.u16(0);
 			f.u16(n as u16);
-			f.slice(&write_idat(status, width, height, data, range)?);
+			f.slice(&write_idat(status, data, n)?);
 			f
 		});
 	}
@@ -303,31 +301,22 @@ fn write_ipal(
 	}
 }
 
-fn write_idat(
-	status: &ItpStatus,
-	w: u32,
-	h: u32,
-	data: &ImageData,
-	range: std::ops::Range<usize>,
-) -> Result<Vec<u8>, Error> {
-	fn inner<T: Clone, const N: usize>(
-		data: &[T],
+fn write_idat(status: &ItpStatus, data: &ImageData, level: usize) -> Result<Vec<u8>, Error> {
+	fn raster<T: Clone, const N: usize>(
+		data: &Raster<T>,
 		status: &ItpStatus,
-		w: u32,
-		h: u32,
 		to_le_bytes: fn(T) -> [u8; N],
 	) -> Vec<u8> {
-		let data = do_swizzle(data.to_vec(), w, h, status.pixel_format);
+		let data = do_swizzle(data, status.pixel_format);
 		let data = data.into_iter().flat_map(to_le_bytes).collect::<Vec<u8>>();
 		maybe_compress(status.compression, &data)
 	}
 
-	let bc_range = range.start / 16..range.end / 16;
 	Ok(match data {
 		ImageData::Indexed(_, data) => match status.base_format {
-			BFT::Indexed1 => inner(&data[range], status, w, h, u8::to_le_bytes),
+			BFT::Indexed1 => raster(&data[level], status, u8::to_le_bytes),
 			BFT::Indexed2 => {
-				let data = a_fast_mode2(&data[range], w, h)?;
+				let data = a_fast_mode2(&data[level])?;
 				let mut f = Writer::new();
 				f.u32(data.len() as u32);
 				f.slice(&maybe_compress(status.compression, &data));
@@ -338,18 +327,19 @@ fn write_idat(
 			}),
 			_ => unreachable!(),
 		},
-		ImageData::Argb16(_, data) => inner(&data[range], status, w, h, u16::to_le_bytes),
-		ImageData::Argb32(data) => inner(&data[range], status, w, h, u32::to_le_bytes),
-		ImageData::Bc1(data) => inner(&data[bc_range], status, w / 4, h / 4, u64::to_le_bytes),
-		ImageData::Bc2(data) => inner(&data[bc_range], status, w / 4, h / 4, u128::to_le_bytes),
-		ImageData::Bc3(data) => inner(&data[bc_range], status, w / 4, h / 4, u128::to_le_bytes),
-		ImageData::Bc7(data) => inner(&data[bc_range], status, w / 4, h / 4, u128::to_le_bytes),
+		ImageData::Argb16(_, data) => raster(&data[level], status, u16::to_le_bytes),
+		ImageData::Argb32(data) => raster(&data[level], status, u32::to_le_bytes),
+		ImageData::Bc1(data) => raster(&data[level], status, u64::to_le_bytes),
+		ImageData::Bc2(data) => raster(&data[level], status, u128::to_le_bytes),
+		ImageData::Bc3(data) => raster(&data[level], status, u128::to_le_bytes),
+		ImageData::Bc7(data) => raster(&data[level], status, u128::to_le_bytes),
 	})
 }
 
-fn do_swizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -> Vec<T> {
-	let width = width as usize;
-	let height = height as usize;
+fn do_swizzle<T: Clone>(raster: &Raster<T>, pixel_format: PFT) -> Vec<T> {
+	let width = raster.width();
+	let height = raster.height();
+	let mut data = raster.as_slice().to_vec();
 	match pixel_format {
 		PFT::Linear => {}
 		PFT::Pfp_1 => permute::swizzle(&mut data, height, width, 8, 16),
@@ -364,14 +354,12 @@ fn do_swizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -
 }
 
 fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
-	let ImageData::Indexed(pal, pixels) = &itp.data else {
+	let ImageData::Indexed(pal, data) = &itp.data else {
 		bail!(e::CcpiMustBeIndexed)
 	};
 
-	ensure!(
-		pixels.len() == itp.width as usize * itp.height as usize,
-		e::CcpiMipmaps
-	);
+	ensure!(data.len() == 1, e::CcpiMipmaps);
+	let pixels = &data[0];
 
 	let mut status_copy = itp.status.clone();
 	status_copy.compression = CT::None;
@@ -390,7 +378,7 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	}
 
 	g.slice(&pal);
-	let (cw, ch, ccpi) = encode_ccpi(itp.width as usize, itp.height as usize, pixels);
+	let (cw, ch, ccpi) = encode_ccpi(pixels);
 	g.slice(&ccpi);
 
 	let mut f = Writer::new();
@@ -407,8 +395,10 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	Ok(f.finish()?)
 }
 
-fn encode_ccpi(w: usize, h: usize, pixels: &[u8]) -> (usize, usize, Vec<u8>) {
+fn encode_ccpi(pixels: &Raster<u8>) -> (usize, usize, Vec<u8>) {
 	// 16*32 pixels means 8*16 tiles, which is guaranteed to be less than
+	let w = pixels.width();
+	let h = pixels.height();
 	let cw = 16;
 	let ch = 32;
 	let mut out = Vec::new();
@@ -419,7 +409,7 @@ fn encode_ccpi(w: usize, h: usize, pixels: &[u8]) -> (usize, usize, Vec<u8>) {
 			let mut chunk = Vec::new();
 			for y in y..y + ch {
 				for x in x..x + cw {
-					chunk.push(pixels[y * w + x]);
+					chunk.push(pixels[[x, y]]);
 				}
 			}
 			permute::swizzle(&mut chunk, ch, cw, 2, 2);
@@ -439,7 +429,7 @@ fn encode_ccpi_chunk(chunk: &[u8]) -> Vec<u8> {
 	v
 }
 
-fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> {
+fn a_fast_mode2(data: &Raster<u8>) -> Result<Vec<u8>, Error> {
 	fn nibbles(f: &mut Writer, data: impl IntoIterator<Item = u8>) {
 		let mut iter = data.into_iter();
 		while let (Some(a), Some(b)) = (iter.next(), iter.next()) {
@@ -447,7 +437,7 @@ fn a_fast_mode2(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Error> 
 		}
 	}
 
-	let data = do_swizzle(data.to_vec(), width, height, PFT::Pfp_1);
+	let data = do_swizzle(data, PFT::Pfp_1);
 
 	let mut colors = Vec::new();
 	let mut out = Vec::new();

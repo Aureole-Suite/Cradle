@@ -3,7 +3,7 @@ use gospel::read::{Le as _, Reader};
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use snafu::prelude::*;
 
-use crate::permute;
+use crate::{permute, raster::Raster};
 
 use super::{abbr::*, ImageData, Itp, ItpStatus, Palette};
 
@@ -370,13 +370,13 @@ fn read_idat(
 	w: u32,
 	h: u32,
 ) -> Result<(), Error> {
-	fn inner<T, const N: usize>(
+	fn raster<T, const N: usize>(
 		f: &mut Reader,
 		status: &ItpStatus,
 		w: u32,
 		h: u32,
 		from_le_bytes: fn([u8; N]) -> T,
-	) -> Result<Vec<T>, Error> {
+	) -> Result<Raster<T>, Error> {
 		let data = read_maybe_compressed(f, status.compression, (w * h) as usize * N)?;
 		let data = data.array_chunks().copied().map(from_le_bytes).collect();
 		Ok(do_unswizzle(data, w, h, status.pixel_format))
@@ -384,8 +384,8 @@ fn read_idat(
 
 	match data {
 		ImageData::Indexed(_, data) => match status.base_format {
-			BFT::Indexed1 => data.extend(inner(f, status, w, h, u8::from_le_bytes)?),
-			BFT::Indexed2 => data.extend({
+			BFT::Indexed1 => data.push(raster(f, status, w, h, u8::from_le_bytes)?),
+			BFT::Indexed2 => data.push({
 				let size = f.u32()? as usize;
 				let data = read_maybe_compressed(f, status.compression, size)?;
 				let g = &mut Reader::new(&data);
@@ -398,17 +398,17 @@ fn read_idat(
 			}),
 			_ => unreachable!(),
 		},
-		ImageData::Argb16(_, data) => data.extend(inner(f, status, w, h, u16::from_le_bytes)?),
-		ImageData::Argb32(data) => data.extend(inner(f, status, w, h, u32::from_le_bytes)?),
-		ImageData::Bc1(data) => data.extend(inner(f, status, w / 4, h / 4, u64::from_le_bytes)?),
-		ImageData::Bc2(data) => data.extend(inner(f, status, w / 4, h / 4, u128::from_le_bytes)?),
-		ImageData::Bc3(data) => data.extend(inner(f, status, w / 4, h / 4, u128::from_le_bytes)?),
-		ImageData::Bc7(data) => data.extend(inner(f, status, w / 4, h / 4, u128::from_le_bytes)?),
+		ImageData::Argb16(_, data) => data.push(raster(f, status, w, h, u16::from_le_bytes)?),
+		ImageData::Argb32(data) => data.push(raster(f, status, w, h, u32::from_le_bytes)?),
+		ImageData::Bc1(data) => data.push(raster(f, status, w / 4, h / 4, u64::from_le_bytes)?),
+		ImageData::Bc2(data) => data.push(raster(f, status, w / 4, h / 4, u128::from_le_bytes)?),
+		ImageData::Bc3(data) => data.push(raster(f, status, w / 4, h / 4, u128::from_le_bytes)?),
+		ImageData::Bc7(data) => data.push(raster(f, status, w / 4, h / 4, u128::from_le_bytes)?),
 	}
 	Ok(())
 }
 
-fn do_unswizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -> Vec<T> {
+fn do_unswizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -> Raster<T> {
 	let width = width as usize;
 	let height = height as usize;
 	match pixel_format {
@@ -421,7 +421,7 @@ fn do_unswizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT)
 			permute::unswizzle(&mut data, height, width, 8, 1);
 		}
 	}
-	data
+	Raster::new_with(width, height, data)
 }
 
 fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
@@ -466,7 +466,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 
 	let pal = read_ipal(f, &status, flags & (1 << 9) != 0, pal_size)?;
 
-	let mut pixels = vec![0; w * h];
+	let mut pixels = Raster::new(w, h);
 	for y in (0..h).step_by(ch) {
 		for x in (0..w).step_by(cw) {
 			let cw = cw.min(w - x);
@@ -476,7 +476,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 			let mut it = chunk.into_iter();
 			for y in y..y + ch {
 				for x in x..x + cw {
-					pixels[y * w + x] = it.next().unwrap();
+					pixels[[x, y]] = it.next().unwrap();
 				}
 			}
 		}
@@ -489,7 +489,7 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 		status,
 		width: w as u32,
 		height: h as u32,
-		data: ImageData::Indexed(pal, pixels),
+		data: ImageData::Indexed(pal, vec![pixels]),
 	})
 }
 
@@ -528,7 +528,7 @@ fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 	Ok(chunk)
 }
 
-fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Error> {
+fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Raster<u8>, Error> {
 	fn nibbles(f: &mut Reader, out: &mut [u8]) -> Result<(), Error> {
 		for i in 0..out.len() / 2 {
 			let x = f.u8()?;
