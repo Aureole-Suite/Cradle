@@ -94,12 +94,7 @@ pub fn read(args: &Args, f: impl Read) -> eyre::Result<Png> {
 	});
 
 	let data = match png.info().color_type {
-		png::ColorType::Indexed if !args.png_no_palette => {
-			ImageData::Indexed(pal.unwrap(), read_frames(png, |[a]| a)?)
-		}
-		png::ColorType::Indexed => ImageData::Argb32(read_frames(png, |[i]| {
-			*pal.as_ref().unwrap().get(i as usize).unwrap_or(&0)
-		})?),
+		png::ColorType::Indexed => ImageData::Indexed(pal.unwrap(), read_frames(png, |[a]| a)?),
 		png::ColorType::Grayscale => {
 			ImageData::Argb32(read_frames(png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?)
 		}
