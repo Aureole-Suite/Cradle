@@ -106,8 +106,8 @@ fn test_parse_all_inner(args: &Args, bytes: &[u8]) -> Result<(), eyre::Error> {
 	assert_eq!(png, png2);
 
 	let mut png_data = Vec::new();
-	png::write(args, Cursor::new(&mut png_data), &png)?;
-	let png2 = png::read(args, Cursor::new(&png_data))?;
+	png::write(Cursor::new(&mut png_data), &png)?;
+	let png2 = png::read(Cursor::new(&png_data))?;
 	assert_eq!(png, png2);
 	Ok(())
 }

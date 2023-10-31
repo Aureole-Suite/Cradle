@@ -2,8 +2,6 @@ use std::io::{Read, Write};
 
 use cradle::raster::Raster;
 
-use crate::Args;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Png {
 	pub width: u32,
@@ -17,7 +15,7 @@ pub enum ImageData {
 	Indexed(Vec<u32>, Vec<Raster<u8>>),
 }
 
-pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
+pub fn write(w: impl Write, img: &Png) -> eyre::Result<()> {
 	let mut png = png::Encoder::new(w, img.width, img.height);
 	match &img.data {
 		ImageData::Argb32(data) => {
@@ -70,7 +68,7 @@ fn write_frames<T, const N: usize>(
 	Ok(())
 }
 
-pub fn read(args: &Args, f: impl Read) -> eyre::Result<Png> {
+pub fn read(f: impl Read) -> eyre::Result<Png> {
 	let png = png::Decoder::new(f).read_info()?;
 	eyre::ensure!(
 		png.info().bit_depth == png::BitDepth::Eight,
