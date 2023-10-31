@@ -72,7 +72,23 @@ fn decode<T: Copy>(r: &Raster<T>, f: impl FnMut(T) -> [u32; 16]) -> Raster<u32> 
 #[cfg(test)]
 #[filetest::filetest("../../samples/itp/*.itp")]
 fn test_parse_all(bytes: &[u8]) -> Result<(), eyre::Error> {
-	let args = &Args::default();
+	test_parse_all_inner(&Args::default(), bytes)
+}
+
+#[cfg(test)]
+#[filetest::filetest("../../samples/itp/*.itp")]
+fn test_parse_all_with_mip(bytes: &[u8]) -> Result<(), eyre::Error> {
+	test_parse_all_inner(
+		&Args {
+			png_mipmap: true,
+			..Args::default()
+		},
+		bytes,
+	)
+}
+
+#[cfg(test)]
+fn test_parse_all_inner(args: &Args, bytes: &[u8]) -> Result<(), eyre::Error> {
 	use std::io::Cursor;
 	let itp = cradle::itp::read(bytes)?;
 	let png = itp_to_png(args, &itp)?;
