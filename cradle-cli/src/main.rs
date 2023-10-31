@@ -73,7 +73,7 @@ impl Cli {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, derive_more::From)]
-#[serde(tag = "type", rename_all="snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 enum Spec {
 	Itc(itc::ItcSpec),
 }
@@ -128,9 +128,9 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	match ext {
 		"itp" => {
 			let data = std::fs::read(file)?;
-			let itp = tracing::info_span!("parse_itp").in_scope(|| {
-				Ok(cradle::itp::read(&data)?)
-			}).strict()?;
+			let itp = tracing::info_span!("parse_itp")
+				.in_scope(|| Ok(cradle::itp::read(&data)?))
+				.strict()?;
 			let output = from_itp(args, &itp, output)?;
 			tracing::info!("wrote to {output}");
 		}
@@ -155,7 +155,11 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn from_itp(args: &Args, itp: &cradle::itp::Itp, output: util::Output) -> eyre::Result<Utf8PathBuf> {
+fn from_itp(
+	args: &Args,
+	itp: &cradle::itp::Itp,
+	output: util::Output,
+) -> eyre::Result<Utf8PathBuf> {
 	if args.dds {
 		let output = output.with_extension("dds");
 		let f = std::fs::File::create(&output)?;

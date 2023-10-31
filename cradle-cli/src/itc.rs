@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use cradle::itp::{Itp, ImageData, Palette};
+use cradle::itp::{ImageData, Itp, Palette};
 use strict_result::Strict;
 
 use crate::{util::Output, Args};
@@ -55,11 +55,11 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 			std::fs::write(&frame_out, itp)?;
 			frame_out
 		} else {
-			let mut itp = tracing::info_span!("parse_itp").in_scope(|| {
-				Ok(cradle::itp::read(itp)?)
-			}).strict()?;
+			let mut itp = tracing::info_span!("parse_itp")
+				.in_scope(|| Ok(cradle::itp::read(itp)?))
+				.strict()?;
 
-			if let Itp { data: ImageData::Indexed(pal @ Palette::External(..), _), ..} = &mut itp {
+			if let ImageData::Indexed(pal @ Palette::External(..), _) = &mut itp.data {
 				if let Some(palette) = &itc.palette {
 					tracing::warn!("inlining palette");
 					*pal = Palette::Embedded(palette.clone())
