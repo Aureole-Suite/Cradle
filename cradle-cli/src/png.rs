@@ -11,23 +11,10 @@ pub struct Png {
 	pub data: ImageData,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageData {
 	Argb32(Vec<Raster<u32>>),
 	Indexed(Vec<u32>, Vec<Raster<u8>>),
-}
-
-impl std::fmt::Debug for ImageData {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Argb32(data) => f.debug_tuple("Argb32").field(&data.len()).finish(),
-			Self::Indexed(pal, data) => f
-				.debug_tuple("Indexed")
-				.field(pal)
-				.field(&data.len())
-				.finish(),
-		}
-	}
 }
 
 pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {

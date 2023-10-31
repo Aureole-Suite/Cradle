@@ -16,7 +16,7 @@ pub struct Itp {
 	pub data: ImageData,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageData {
 	Indexed(Palette, Vec<Raster<u8>>),
 	Argb16(Argb16Mode, Vec<Raster<u16>>),
@@ -32,28 +32,6 @@ pub enum Argb16Mode {
 	Mode1,
 	Mode2,
 	Mode3,
-}
-
-impl std::fmt::Debug for ImageData {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		match self {
-			Self::Indexed(pal, data) => f
-				.debug_tuple("Indexed")
-				.field(pal)
-				.field(&data.len())
-				.finish(),
-			Self::Argb16(mode, data) => f
-				.debug_tuple("Argb16")
-				.field(mode)
-				.field(&data.len())
-				.finish(),
-			Self::Argb32(data) => f.debug_tuple("Argb32").field(&data.len()).finish(),
-			Self::Bc1(data) => f.debug_tuple("Bc1").field(&data.len()).finish(),
-			Self::Bc2(data) => f.debug_tuple("Bc2").field(&data.len()).finish(),
-			Self::Bc3(data) => f.debug_tuple("Bc3").field(&data.len()).finish(),
-			Self::Bc7(data) => f.debug_tuple("Bc7").field(&data.len()).finish(),
-		}
-	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
