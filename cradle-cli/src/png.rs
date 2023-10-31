@@ -23,7 +23,7 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 		ImageData::Argb32(data) => {
 			png.set_color(png::ColorType::Rgba);
 			png.set_depth(png::BitDepth::Eight);
-			write_frames(data, args, png, |&argb| {
+			write_frames(data, png, |&argb| {
 				let [b, g, r, a] = argb.to_le_bytes();
 				[r, g, b, a]
 			})
@@ -42,19 +42,18 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 			png.set_depth(png::BitDepth::Eight);
 			png.set_palette(pal);
 			png.set_trns(alp);
-			write_frames(data, args, png, |&i| [i])
+			write_frames(data, png, |&i| [i])
 		}
 	}
 }
 
 fn write_frames<T, const N: usize>(
 	data: &[Raster<T>],
-	args: &Args,
 	mut png: png::Encoder<impl Write>,
 	mut f: impl FnMut(&T) -> [u8; N],
 ) -> Result<(), eyre::Error> {
 	let nmips = data.len();
-	if nmips > 1 && args.png_mipmap {
+	if nmips > 1 {
 		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
 		png.set_dispose_op(png::DisposeOp::Background)?;
@@ -66,10 +65,6 @@ fn write_frames<T, const N: usize>(
 			png.set_frame_dimension(frame.width() as u32, frame.height() as u32)?;
 		}
 		png.write_image_data(&frame.as_slice().iter().flat_map(&mut f).collect::<Vec<_>>())?;
-		if nmips > 1 && !args.png_mipmap {
-			tracing::warn!("discarding mipmaps");
-			break;
-		}
 	}
 	png.finish()?;
 	Ok(())
@@ -100,21 +95,21 @@ pub fn read(args: &Args, f: impl Read) -> eyre::Result<Png> {
 
 	let data = match png.info().color_type {
 		png::ColorType::Indexed if !args.png_no_palette => {
-			ImageData::Indexed(pal.unwrap(), read_frames(args, png, |[a]| a)?)
+			ImageData::Indexed(pal.unwrap(), read_frames(png, |[a]| a)?)
 		}
-		png::ColorType::Indexed => ImageData::Argb32(read_frames(args, png, |[i]| {
+		png::ColorType::Indexed => ImageData::Argb32(read_frames(png, |[i]| {
 			*pal.as_ref().unwrap().get(i as usize).unwrap_or(&0)
 		})?),
-		png::ColorType::Grayscale => ImageData::Argb32(read_frames(args, png, |[k]| {
-			u32::from_le_bytes([k, k, k, 0xFF])
-		})?),
-		png::ColorType::GrayscaleAlpha => ImageData::Argb32(read_frames(args, png, |[k, a]| {
-			u32::from_le_bytes([k, k, k, a])
-		})?),
-		png::ColorType::Rgb => ImageData::Argb32(read_frames(args, png, |[r, g, b]| {
+		png::ColorType::Grayscale => {
+			ImageData::Argb32(read_frames(png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?)
+		}
+		png::ColorType::GrayscaleAlpha => {
+			ImageData::Argb32(read_frames(png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?)
+		}
+		png::ColorType::Rgb => ImageData::Argb32(read_frames(png, |[r, g, b]| {
 			u32::from_le_bytes([b, g, r, 0xFF])
 		})?),
-		png::ColorType::Rgba => ImageData::Argb32(read_frames(args, png, |[r, g, b, a]| {
+		png::ColorType::Rgba => ImageData::Argb32(read_frames(png, |[r, g, b, a]| {
 			u32::from_le_bytes([b, g, r, a])
 		})?),
 	};
@@ -127,7 +122,6 @@ pub fn read(args: &Args, f: impl Read) -> eyre::Result<Png> {
 }
 
 fn read_frames<R: Read, T, const N: usize>(
-	args: &Args,
 	mut png: png::Reader<R>,
 	mut sample: impl FnMut([u8; N]) -> T,
 ) -> eyre::Result<Vec<Raster<T>>> {
@@ -135,10 +129,6 @@ fn read_frames<R: Read, T, const N: usize>(
 	let mut buf = vec![0; png.output_buffer_size()];
 	let mut out = Vec::new();
 	for n in 0..n_frames {
-		if n > 1 && !args.png_mipmap {
-			tracing::warn!("discarding mipmaps");
-			break;
-		}
 		let frame = png.next_frame(&mut buf)?;
 		eyre::ensure!(frame.width == png.info().width >> n, "invalid frame width");
 		eyre::ensure!(
