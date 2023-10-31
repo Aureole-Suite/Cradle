@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use cradle::itp::mipmaps;
+use cradle::raster::Raster;
 
 use crate::Args;
 
@@ -13,8 +13,8 @@ pub struct Png {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ImageData {
-	Argb32(Vec<u32>),
-	Indexed(Vec<u32>, Vec<u8>),
+	Argb32(Vec<Raster<u32>>),
+	Indexed(Vec<u32>, Vec<Raster<u8>>),
 }
 
 impl std::fmt::Debug for ImageData {
@@ -62,12 +62,12 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 
 fn write_frames<T, const N: usize>(
 	img: &Png,
-	data: &[T],
+	data: &[Raster<T>],
 	args: &Args,
 	mut png: png::Encoder<impl Write>,
 	mut f: impl FnMut(&T) -> [u8; N],
 ) -> Result<(), eyre::Error> {
-	let nmips = mipmaps(img.width, img.height, data.len()).count();
+	let nmips = data.len();
 	if nmips > 1 && args.png_mipmap {
 		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
@@ -75,16 +75,11 @@ fn write_frames<T, const N: usize>(
 	}
 	let mut png = png.write_header()?;
 	let mut first = true;
-	for (w, h, range) in mipmaps(img.width, img.height, data.len()) {
+	for frame in data {
 		if !std::mem::take(&mut first) {
-			png.set_frame_dimension(w, h)?;
+			png.set_frame_dimension(frame.width() as u32, frame.height() as u32)?;
 		}
-		png.write_image_data(
-			&data[range.start..range.end]
-				.iter()
-				.flat_map(&mut f)
-				.collect::<Vec<_>>(),
-		)?;
+		png.write_image_data(&frame.as_slice().iter().flat_map(&mut f).collect::<Vec<_>>())?;
 		if nmips > 1 && !args.png_mipmap {
 			tracing::warn!("discarding mipmaps");
 			break;
@@ -149,7 +144,7 @@ fn read_frames<R: Read, T, const N: usize>(
 	args: &Args,
 	mut png: png::Reader<R>,
 	mut sample: impl FnMut([u8; N]) -> T,
-) -> eyre::Result<Vec<T>> {
+) -> eyre::Result<Vec<Raster<T>>> {
 	let n_frames = png.info().animation_control.map_or(1, |ac| ac.num_frames);
 	let mut buf = vec![0; png.output_buffer_size()];
 	let mut out = Vec::new();
@@ -164,12 +159,15 @@ fn read_frames<R: Read, T, const N: usize>(
 			frame.height == png.info().height >> n,
 			"invalid frame height"
 		);
-		out.extend(
+		out.push(Raster::new_with(
+			frame.width as usize,
+			frame.height as usize,
 			buf[..frame.buffer_size()]
 				.array_chunks()
 				.copied()
-				.map(&mut sample),
-		)
+				.map(&mut sample)
+				.collect(),
+		))
 	}
 	Ok(out)
 }
