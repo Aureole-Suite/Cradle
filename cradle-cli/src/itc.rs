@@ -143,6 +143,51 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 	}
 }
 
+pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle::itc::Itc> {
+	let mut itc = cradle::itc::Itc {
+		palette: spec.palette,
+		..Default::default()
+	};
+	for (order, spec) in spec.frames.iter().enumerate() {
+		let _span = tracing::info_span!("frame", i = spec.frame).entered();
+		let Some(frame) = itc.frames.get_mut(spec.frame) else {
+			eyre::bail!("invalid frame number");
+		};
+		if frame.itp.is_some() {
+			eyre::bail!("duplicate frame number");
+		}
+
+		let path = dir.join(&spec.path);
+		let (itp_data, offset) =
+			if spec.offset.is_none() && path.extension() == Some("png") && !args.itc_no_pad {
+				let data = std::fs::File::open(path)?;
+				let _span = tracing::info_span!("parse_png").entered();
+				let png = png::read(args, &data)?;
+				let (png, offset) = crop(png);
+				let mut itp = crate::itp_png::png_to_itp(args, &png);
+				drop(_span);
+				crate::guess_itp_revision(args, &mut itp);
+				let offset = (offset.0 as f32, offset.1 as f32);
+				(cradle::itp::write(&itp)?, offset)
+			} else {
+				let offset = spec.offset.unwrap_or_default();
+				(crate::to_itp(args, &path)?, offset)
+			};
+
+		let (w, h) = cradle::itp::read_size(&itp_data)?;
+		let offset = (offset.0 / w as f32, offset.1 / h as f32);
+
+		*frame = cradle::itc::Frame {
+			itp: Some(itp_data),
+			unknown: 0,
+			offset,
+			scale: spec.scale,
+			order,
+		};
+	}
+	Ok(itc)
+}
+
 fn pad(png: png::Png, x: i32, y: i32, width: u32, height: u32) -> png::Png {
 	let x = u32::checked_add_signed((width - png.width) / 2, x).unwrap();
 	let y = u32::checked_add_signed((height - png.height) / 2, y).unwrap();
@@ -167,6 +212,32 @@ fn pad(png: png::Png, x: i32, y: i32, width: u32, height: u32) -> png::Png {
 	}
 }
 
+fn crop(png: png::Png) -> (png::Png, (isize, isize)) {
+	let mut data = png.data;
+	let (offset, width, height) = match &mut data {
+		png::ImageData::Argb32(data) => {
+			let (cropped, offset, width) = do_crop(data, png.width as usize);
+			*data = cropped;
+			(offset, width, data.len() / width)
+		}
+		png::ImageData::Indexed(_, data) => {
+			let (cropped, offset, width) = do_crop(data, png.width as usize);
+			*data = cropped;
+			(offset, width, data.len() / width)
+		}
+	};
+	let png = png::Png {
+		width: width as u32,
+		height: height as u32,
+		data,
+	};
+	(png, offset)
+}
+
+fn do_crop<T: PartialEq>(data: &[T], width: usize) -> (Vec<T>, (isize, isize), usize) {
+	todo!()
+}
+
 fn copy_rect<T: Clone>(src: &[T], dst: &mut [T], src_width: usize, dst_width: usize) {
 	use std::iter::zip;
 	for (src, dst) in zip(src.chunks_exact(src_width), dst.chunks_exact_mut(dst_width)) {
@@ -174,39 +245,6 @@ fn copy_rect<T: Clone>(src: &[T], dst: &mut [T], src_width: usize, dst_width: us
 			*dst = src.clone()
 		}
 	}
-}
-
-pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle::itc::Itc> {
-	let mut itc = cradle::itc::Itc {
-		palette: spec.palette,
-		..Default::default()
-	};
-	for (order, spec) in spec.frames.iter().enumerate() {
-		let _span = tracing::info_span!("frame", i = spec.frame).entered();
-		let Some(frame) = itc.frames.get_mut(spec.frame) else {
-			eyre::bail!("invalid frame number");
-		};
-		if frame.itp.is_some() {
-			eyre::bail!("duplicate frame number");
-		}
-		let itp = crate::to_itp(args, &dir.join(&spec.path))?;
-		let (w, h) = cradle::itp::read_size(&itp)?;
-
-		let offset = if let Some((x, y)) = spec.offset {
-			(x / w as f32, y / h as f32)
-		} else {
-			(0., 0.)
-		};
-
-		*frame = cradle::itc::Frame {
-			itp: Some(itp),
-			unknown: 0,
-			offset,
-			scale: spec.scale,
-			order,
-		};
-	}
-	Ok(itc)
 }
 
 #[cfg(test)]
