@@ -1,5 +1,5 @@
 mod enums;
-use std::io::{Read, Write, Result, Error, ErrorKind};
+use std::io::{Error, ErrorKind, Read, Result, Write};
 
 pub use enums::*;
 
@@ -31,9 +31,17 @@ impl Dds {
 		let depth = f.u32()?;
 		let mip_map_count = f.u32()?;
 		let reserved = [
-			f.u32()?, f.u32()?, f.u32()?, f.u32()?,
-			f.u32()?, f.u32()?, f.u32()?, f.u32()?,
-			f.u32()?, f.u32()?, f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
+			f.u32()?,
 		];
 		let pixel_format = PixelFormat::read(f)?;
 		let caps = f.u128()?;
@@ -46,9 +54,17 @@ impl Dds {
 		};
 
 		Ok(Dds {
-			flags, height, width, pitch, depth,
-			mip_map_count, reserved, pixel_format,
-			caps, reserved2, dx10,
+			flags,
+			height,
+			width,
+			pitch,
+			depth,
+			mip_map_count,
+			reserved,
+			pixel_format,
+			caps,
+			reserved2,
+			dx10,
 		})
 	}
 
@@ -216,7 +232,10 @@ trait ReadData: Read {
 		if v == val {
 			Ok(())
 		} else {
-			Err(Error::new(ErrorKind::InvalidData, format!("expected {val}, got {v}")))
+			Err(Error::new(
+				ErrorKind::InvalidData,
+				format!("expected {val}, got {v}"),
+			))
 		}
 	}
 }

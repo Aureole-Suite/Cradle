@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+#[rustfmt::skip]
 pub mod DDSD {
 	pub const DEFAULT:         u32 = CAPS | HEIGHT | WIDTH | PIXELFORMAT;
 	pub const CAPS:            u32 = 0x00000001;
@@ -25,6 +26,7 @@ pub mod DDSD {
 	pub const ALL:             u32 = 0x00FFF9EE;
 }
 
+#[rustfmt::skip]
 pub mod DDSCAPS {
 	pub const RESERVED1:                 u128 = 0x00000001;
 	pub const ALPHA:                     u128 = 0x00000002;
@@ -101,6 +103,7 @@ pub mod DDSCAPS {
 	pub const OPENSHAREDRESOURCE:        u128 = 0x00008000 << 64;
 }
 
+#[rustfmt::skip]
 pub mod DDPF {
 	pub const ALPHAPIXELS:       u32 = 0x00000001;
 	pub const ALPHA:             u32 = 0x00000002;
@@ -123,14 +126,16 @@ pub mod DDPF {
 	pub const BUMPDUDV:          u32 = 0x00080000;
 }
 
+#[rustfmt::skip]
 pub mod RESOURCE_DIMENSION {
-	pub const UNKNOWN: u32 = 0;
-	pub const BUFFER: u32 = 1;
+	pub const UNKNOWN:   u32 = 0;
+	pub const BUFFER:    u32 = 1;
 	pub const TEXTURE1D: u32 = 2;
 	pub const TEXTURE2D: u32 = 3;
 	pub const TEXTURE3D: u32 = 4;
 }
 
+#[rustfmt::skip]
 pub mod RESOURCE_MISC {
 	pub const GENERATE_MIPS:                   u32 = 0x00000001;
 	pub const SHARED:                          u32 = 0x00000002;
@@ -155,6 +160,7 @@ pub mod RESOURCE_MISC {
 	pub const SHARED_EXCLUSIVE_WRITER:         u32 = 0x00200000;
 }
 
+#[rustfmt::skip]
 pub mod ALPHA_MODE {
 	pub const UNKNOWN:       u32 = 0x0;
 	pub const STRAIGHT:      u32 = 0x1;
@@ -164,6 +170,7 @@ pub mod ALPHA_MODE {
 	pub const MASK:          u32 = 0x7;
 }
 
+#[rustfmt::skip]
 pub mod DXGI_FORMAT {
 	pub const UNKNOWN:                    u32 = 0;
 	pub const R32G32B32A32_TYPELESS:      u32 = 1;

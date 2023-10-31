@@ -6,8 +6,8 @@ use clap::ValueHint;
 use eyre_span::emit;
 use strict_result::*;
 
-mod itp_png;
 mod itp_dds;
+mod itp_png;
 mod util;
 
 #[derive(Debug, Clone, Parser)]
@@ -74,11 +74,8 @@ fn init_tracing() -> Result<(), eyre::Error> {
 	use tracing_error::ErrorLayer;
 	use tracing_subscriber::prelude::*;
 	use tracing_subscriber::{fmt, EnvFilter};
-	let fmt_layer = fmt::layer()
-		.with_writer(std::io::stderr)
-		.with_target(false);
-	let filter_layer = EnvFilter::try_from_default_env()
-		.or_else(|_| EnvFilter::try_new("info"))?;
+	let fmt_layer = fmt::layer().with_writer(std::io::stderr).with_target(false);
+	let filter_layer = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?;
 	tracing_subscriber::registry()
 		.with(filter_layer)
 		.with(fmt_layer)
@@ -112,9 +109,9 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 }
 
 fn from_itp(args: &Args, itp_bytes: &[u8], output: util::Output) -> eyre::Result<Utf8PathBuf> {
-	let itp = tracing::info_span!("parse_itp").in_scope(|| {
-		Ok(cradle::itp::read(itp_bytes)?)
-	}).strict()?;
+	let itp = tracing::info_span!("parse_itp")
+		.in_scope(|| Ok(cradle::itp::read(itp_bytes)?))
+		.strict()?;
 	if args.dds {
 		let output = output.with_extension("dds");
 		let f = std::fs::File::create(&output)?;
@@ -133,25 +130,21 @@ fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
 	let data = match path.extension() {
 		Some("png") => {
 			let data = std::fs::File::open(path)?;
-			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
-				itp_png::png_to_itp(args, &itp_png::read_png(args, &data)?)
-			})?;
+			let mut itp = tracing::info_span!("parse_png")
+				.in_scope(|| itp_png::png_to_itp(args, &itp_png::read_png(args, &data)?))?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
 
 		Some("dds") => {
 			let data = std::fs::File::open(path)?;
-			let mut itp = tracing::info_span!("parse_dds").in_scope(|| {
-				itp_dds::dds_to_itp(args, &data)
-			})?;
+			let mut itp =
+				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
 
-		Some("itp") => {
-			std::fs::read(path)?
-		}
+		Some("itp") => std::fs::read(path)?,
 
 		_ => eyre::bail!("unknown file extension"),
 	};
@@ -173,6 +166,6 @@ fn guess_itp_revision(args: &Args, itp: &mut cradle::itp::Itp) {
 			cradle::itp::ImageData::Bc2(_) => IR::V2,
 			cradle::itp::ImageData::Bc3(_) => IR::V2,
 			cradle::itp::ImageData::Bc7(_) => IR::V3,
-		}
+		},
 	}
 }

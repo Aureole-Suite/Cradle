@@ -1,6 +1,6 @@
-use std::ffi::CString;
-use num_enum::TryFromPrimitive;
 use gospel::read::Reader;
+use num_enum::TryFromPrimitive;
+use std::ffi::CString;
 
 mod read;
 mod write;
@@ -37,8 +37,16 @@ pub enum Argb16Mode {
 impl std::fmt::Debug for ImageData {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-			Self::Indexed(pal, data) => f.debug_tuple("Indexed").field(pal).field(&data.len()).finish(),
-			Self::Argb16(mode, data) => f.debug_tuple("Argb16").field(mode).field(&data.len()).finish(),
+			Self::Indexed(pal, data) => f
+				.debug_tuple("Indexed")
+				.field(pal)
+				.field(&data.len())
+				.finish(),
+			Self::Argb16(mode, data) => f
+				.debug_tuple("Argb16")
+				.field(mode)
+				.field(&data.len())
+				.finish(),
 			Self::Argb32(data) => f.debug_tuple("Argb32").field(&data.len()).finish(),
 			Self::Bc1(data) => f.debug_tuple("Bc1").field(&data.len()).finish(),
 			Self::Bc2(data) => f.debug_tuple("Bc2").field(&data.len()).finish(),
@@ -146,14 +154,14 @@ pub enum MipmapType {
 }
 
 pub mod abbr {
-	pub use super::ItpRevision as IR;
-	pub use super::BaseFormatType as BFT;
-	pub use super::PixelBitFormatType as PBFT;
-	pub use super::CompressionType as CT;
-	pub use super::PixelFormatType as PFT;
-	pub use super::MultiPlaneType as MPT;
-	pub use super::MipmapType as MT;
 	pub use super::Argb16Mode as A16;
+	pub use super::BaseFormatType as BFT;
+	pub use super::CompressionType as CT;
+	pub use super::ItpRevision as IR;
+	pub use super::MipmapType as MT;
+	pub use super::MultiPlaneType as MPT;
+	pub use super::PixelBitFormatType as PBFT;
+	pub use super::PixelFormatType as PFT;
 }
 
 use abbr::*;
@@ -167,7 +175,8 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, write::Error> {
 }
 
 fn show_fourcc(fourcc: [u8; 4]) -> String {
-	fourcc.iter()
+	fourcc
+		.iter()
 		.flat_map(|a| std::ascii::escape_default(*a))
 		.map(char::from)
 		.collect()
@@ -176,15 +185,15 @@ fn show_fourcc(fourcc: [u8; 4]) -> String {
 impl Itp {
 	pub fn new(itp_revision: IR, width: u32, height: u32, data: ImageData) -> Itp {
 		let (base_format, pixel_bit_format) = match &data {
-			ImageData::Indexed(_, _)         => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
+			ImageData::Indexed(_, _) => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
 			ImageData::Argb16(A16::Mode1, _) => (BFT::Argb16, PBFT::Argb16_1),
 			ImageData::Argb16(A16::Mode2, _) => (BFT::Argb16, PBFT::Argb16_2),
 			ImageData::Argb16(A16::Mode3, _) => (BFT::Argb16, PBFT::Argb16_3),
-			ImageData::Argb32(_)             => (BFT::Argb32, PBFT::Argb32),
-			ImageData::Bc1(_)                => (BFT::Bc1, PBFT::Compressed),
-			ImageData::Bc2(_)                => (BFT::Bc2, PBFT::Compressed),
-			ImageData::Bc3(_)                => (BFT::Bc3, PBFT::Compressed),
-			ImageData::Bc7(_)                => (BFT::Bc7, PBFT::Compressed),
+			ImageData::Argb32(_) => (BFT::Argb32, PBFT::Argb32),
+			ImageData::Bc1(_) => (BFT::Bc1, PBFT::Compressed),
+			ImageData::Bc2(_) => (BFT::Bc2, PBFT::Compressed),
+			ImageData::Bc3(_) => (BFT::Bc3, PBFT::Compressed),
+			ImageData::Bc7(_) => (BFT::Bc7, PBFT::Compressed),
 		};
 		let nmip = mipmaps(width, height, data.pixel_count()).count();
 		Itp {
@@ -209,24 +218,28 @@ impl ImageData {
 	pub fn pixel_count(&self) -> usize {
 		match self {
 			ImageData::Indexed(_, d) => d.len(),
-			ImageData::Argb16(_, d)  => d.len(),
-			ImageData::Argb32(d)     => d.len(),
-			ImageData::Bc1(d)        => d.len() * 16,
-			ImageData::Bc2(d)        => d.len() * 16,
-			ImageData::Bc3(d)        => d.len() * 16,
-			ImageData::Bc7(d)        => d.len() * 16,
+			ImageData::Argb16(_, d) => d.len(),
+			ImageData::Argb32(d) => d.len(),
+			ImageData::Bc1(d) => d.len() * 16,
+			ImageData::Bc2(d) => d.len() * 16,
+			ImageData::Bc3(d) => d.len() * 16,
+			ImageData::Bc7(d) => d.len() * 16,
 		}
 	}
 }
 
-pub fn mipmaps(mut width: u32, mut height: u32, len: usize) -> impl Iterator<Item=(u32, u32, std::ops::Range<usize>)> {
+pub fn mipmaps(
+	mut width: u32,
+	mut height: u32,
+	len: usize,
+) -> impl Iterator<Item = (u32, u32, std::ops::Range<usize>)> {
 	let mut pos = 0;
 	std::iter::from_fn(move || {
-		let size = (width*height) as usize;
+		let size = (width * height) as usize;
 		if size == 0 || pos + size > len {
 			None
 		} else {
-			let val = (width, height, pos..pos+size);
+			let val = (width, height, pos..pos + size);
 			pos += size;
 			width >>= 1;
 			height >>= 1;

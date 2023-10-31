@@ -1,11 +1,11 @@
 use falcompress::freadp::freadp;
-use gospel::read::{Reader, Le as _};
+use gospel::read::{Le as _, Reader};
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use snafu::prelude::*;
 
 use crate::permute;
 
-use super::{Itp, ItpStatus, ImageData, Palette, abbr::*};
+use super::{abbr::*, ImageData, Itp, ItpStatus, Palette};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -14,7 +14,10 @@ pub enum Error {
 
 	#[allow(private_interfaces)]
 	#[snafu(context(false))]
-	Invalid { source: InnerError, backtrace: std::backtrace::Backtrace },
+	Invalid {
+		source: InnerError,
+		backtrace: std::backtrace::Backtrace,
+	},
 }
 
 #[derive(Debug, Snafu)]
@@ -66,7 +69,7 @@ enum InnerError {
 	PaletteMissing,
 
 	#[snafu(display("{what} is not yet implemented"))]
-	Todo { what: String }
+	Todo { what: String },
 }
 
 impl From<gospel::read::Error> for Error {
@@ -82,7 +85,9 @@ impl From<falcompress::Error> for Error {
 }
 
 macro_rules! bail {
-	($e:expr) => { $e.fail::<!>()? }
+	($e:expr) => {
+		$e.fail::<!>()?
+	};
 }
 
 pub fn read(f: &mut Reader) -> Result<Itp, Error> {
@@ -97,7 +102,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 			f.seek(f.pos() - 4)?;
 			return read_revision_3(f);
 		}
-		999  => 0x108802, // Argb16_2, None, Linear
+		999 => 0x108802,  // Argb16_2, None, Linear
 		1000 => 0x108801, // Indexed1, None, Linear
 		1001 => 0x110802, // Argb16_2, Bz_1, Linear
 		1002 => 0x110801, // Indexed1, Bz_1, Linear
@@ -122,13 +127,22 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	let height = f.u32()?;
 
 	if let ImageData::Indexed(pal, _) = &mut data {
-		let pal_size = if matches!(head, 1000 | 1002) { 256 } else { f.u32()? as usize };
+		let pal_size = if matches!(head, 1000 | 1002) {
+			256
+		} else {
+			f.u32()? as usize
+		};
 		*pal = read_ipal(f, &status, false, pal_size)?;
 	}
 
 	read_idat(f, &status, &mut data, width, height)?;
 
-	Ok(Itp { status, width, height, data })
+	Ok(Itp {
+		status,
+		width,
+		height,
+		data,
+	})
 }
 
 fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
@@ -194,14 +208,20 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 				f.check_u16(0)?;
 				f.check_u16(current_mip as u16)?;
 				let data = data.as_mut().context(e::NoHeader)?;
-				read_idat(f, &status, data, width >> current_mip, height >> current_mip)?;
+				read_idat(
+					f,
+					&status,
+					data,
+					width >> current_mip,
+					height >> current_mip,
+				)?;
 				current_mip += 1;
 			}
 
 			b"IEXT" => bail!(e::Todo { what: "IEXT chunk" }),
 
 			b"IEND" => break,
-			_ => bail!(e::BadChunk { fourcc })
+			_ => bail!(e::BadChunk { fourcc }),
 		}
 	}
 
@@ -219,11 +239,21 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		}
 	}
 
-
 	ensure_size(f.pos() - start, file_size)?;
-	ensure!(n_mip == current_mip, e::WrongMips { expected: n_mip, value: current_mip });
+	ensure!(
+		n_mip == current_mip,
+		e::WrongMips {
+			expected: n_mip,
+			value: current_mip
+		}
+	);
 
-	Ok(Itp { status, width, height, data })
+	Ok(Itp {
+		status,
+		width,
+		height,
+		data,
+	})
 }
 
 fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
@@ -283,7 +313,10 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 		_ => None
 	};
 
-	let unused: u32 = [5, 6, 7, 8, 9, 18, 19, 23, 27, 31].iter().map(|a| 1 << *a).sum();
+	let unused: u32 = [5, 6, 7, 8, 9, 18, 19, 23, 27, 31]
+		.iter()
+		.map(|a| 1 << *a)
+		.sum();
 	ensure!(f & unused == 0, e::ExtraFlags { flags: f & unused });
 
 	Ok(ItpStatus {
@@ -298,7 +331,12 @@ fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
 	})
 }
 
-fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize) -> Result<Palette, Error> {
+fn read_ipal(
+	f: &mut Reader,
+	status: &ItpStatus,
+	is_external: bool,
+	size: usize,
+) -> Result<Palette, Error> {
 	if is_external {
 		ensure!(size == 0, e::ExternalPaletteMustBe0);
 		Ok(Palette::External(f.cstr()?.to_owned()))
@@ -313,7 +351,7 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 
 		if status.base_format == BFT::Indexed2 {
 			for i in 1..size {
-				colors[i] = colors[i].wrapping_add(colors[i-1])
+				colors[i] = colors[i].wrapping_add(colors[i - 1])
 			}
 		}
 		for c in &mut colors {
@@ -324,10 +362,22 @@ fn read_ipal(f: &mut Reader, status: &ItpStatus, is_external: bool, size: usize)
 	}
 }
 
-fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: u32, height: u32) -> Result<(), Error> {
+fn read_idat(
+	f: &mut Reader,
+	status: &ItpStatus,
+	data: &mut ImageData,
+	width: u32,
+	height: u32,
+) -> Result<(), Error> {
 	match data {
 		ImageData::Indexed(_, data) => match status.base_format {
-			BFT::Indexed1 => data.extend(read_idat_simple(f, status, width, height, u8::from_le_bytes)?),
+			BFT::Indexed1 => data.extend(read_idat_simple(
+				f,
+				status,
+				width,
+				height,
+				u8::from_le_bytes,
+			)?),
 			BFT::Indexed2 => data.extend({
 				let size = f.u32()? as usize;
 				let data = read_maybe_compressed(f, status.compression, size)?;
@@ -336,15 +386,53 @@ fn read_idat(f: &mut Reader, status: &ItpStatus, data: &mut ImageData, width: u3
 				ensure_end(g)?;
 				data
 			}),
-			BFT::Indexed3 => bail!(e::Todo { what: "CCPI is not supported for revision 3" }),
-			_ => unreachable!()
+			BFT::Indexed3 => bail!(e::Todo {
+				what: "CCPI is not supported for revision 3"
+			}),
+			_ => unreachable!(),
 		},
-		ImageData::Argb16(_, data) => data.extend(read_idat_simple(f, status, width, height, u16::from_le_bytes)?),
-		ImageData::Argb32(data) => data.extend(read_idat_simple(f, status, width, height, u32::from_le_bytes)?),
-		ImageData::Bc1(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u64::from_le_bytes)?),
-		ImageData::Bc2(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes)?),
-		ImageData::Bc3(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes)?),
-		ImageData::Bc7(data) => data.extend(read_idat_simple(f, status, width / 4, height / 4, u128::from_le_bytes)?),
+		ImageData::Argb16(_, data) => data.extend(read_idat_simple(
+			f,
+			status,
+			width,
+			height,
+			u16::from_le_bytes,
+		)?),
+		ImageData::Argb32(data) => data.extend(read_idat_simple(
+			f,
+			status,
+			width,
+			height,
+			u32::from_le_bytes,
+		)?),
+		ImageData::Bc1(data) => data.extend(read_idat_simple(
+			f,
+			status,
+			width / 4,
+			height / 4,
+			u64::from_le_bytes,
+		)?),
+		ImageData::Bc2(data) => data.extend(read_idat_simple(
+			f,
+			status,
+			width / 4,
+			height / 4,
+			u128::from_le_bytes,
+		)?),
+		ImageData::Bc3(data) => data.extend(read_idat_simple(
+			f,
+			status,
+			width / 4,
+			height / 4,
+			u128::from_le_bytes,
+		)?),
+		ImageData::Bc7(data) => data.extend(read_idat_simple(
+			f,
+			status,
+			width / 4,
+			height / 4,
+			u128::from_le_bytes,
+		)?),
 	}
 	Ok(())
 }
@@ -357,18 +445,27 @@ fn read_idat_simple<T, const N: usize>(
 	from_le_bytes: fn([u8; N]) -> T,
 ) -> Result<Vec<T>, Error> {
 	let data = read_maybe_compressed(f, status.compression, (width * height) as usize * N)?;
-	let data = data.array_chunks().copied().map(from_le_bytes).collect::<Vec<_>>();
-	Ok(do_unswizzle(data, width as usize, height as usize, status.pixel_format))
+	let data = data
+		.array_chunks()
+		.copied()
+		.map(from_le_bytes)
+		.collect::<Vec<_>>();
+	Ok(do_unswizzle(
+		data,
+		width as usize,
+		height as usize,
+		status.pixel_format,
+	))
 }
 
 fn do_unswizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Vec<T> {
 	match pixel_format {
-		PFT::Linear => {},
+		PFT::Linear => {}
 		PFT::Pfp_1 => permute::unswizzle(&mut data, height, width, 8, 16),
 		PFT::Pfp_2 => permute::unswizzle(&mut data, height, width, 32, 32),
 		PFT::Pfp_3 => permute::unmorton(&mut data, height, width),
 		PFT::Pfp_4 => {
-			permute::unmorton(&mut data, width*height/8, 8);
+			permute::unmorton(&mut data, width * height / 8, 8);
 			permute::unswizzle(&mut data, height, width, 8, 1);
 		}
 	}
@@ -377,8 +474,9 @@ fn do_unswizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: 
 
 fn make_data(status: &ItpStatus) -> Result<ImageData, Error> {
 	Ok(match (status.base_format, status.pixel_bit_format) {
-		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) =>
-			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new()),
+		(BFT::Indexed1 | BFT::Indexed2 | BFT::Indexed3, PBFT::Indexed) => {
+			ImageData::Indexed(Palette::Embedded(Vec::new()), Vec::new())
+		}
 		(BFT::Argb16, PBFT::Argb16_1) => ImageData::Argb16(A16::Mode1, Vec::new()),
 		(BFT::Argb16, PBFT::Argb16_2) => ImageData::Argb16(A16::Mode2, Vec::new()),
 		(BFT::Argb16, PBFT::Argb16_3) => ImageData::Argb16(A16::Mode3, Vec::new()),
@@ -405,23 +503,27 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 
 	ensure!(matches!(version, 6 | 7), e::CcpiVersion { version });
 
-	let compression = if flags & (1<<15) != 0 { CT::Bz_1 } else { CT::None };
+	let compression = if flags & (1 << 15) != 0 {
+		CT::Bz_1
+	} else {
+		CT::None
+	};
 	let data = read_maybe_compressed(f, compression, data_size - 16)?;
 	status.compression = CT::None;
 	let f = &mut Reader::new(&data);
 
-	let pal = read_ipal(f, &status, flags & (1<<9) != 0, pal_size)?;
+	let pal = read_ipal(f, &status, flags & (1 << 9) != 0, pal_size)?;
 
-	let mut pixels = vec![0; w*h];
+	let mut pixels = vec![0; w * h];
 	for y in (0..h).step_by(ch) {
 		for x in (0..w).step_by(cw) {
-			let cw = cw.min(w-x);
-			let ch = ch.min(h-y);
+			let cw = cw.min(w - x);
+			let ch = ch.min(h - y);
 			let mut chunk = read_ccpi_chunk(f, cw * ch)?;
 			permute::unswizzle(&mut chunk, ch, cw, 2, 2);
 			let mut it = chunk.into_iter();
-			for y in y..y+ch {
-				for x in x..x+cw {
+			for y in y..y + ch {
+				for x in x..x + cw {
 					pixels[y * w + x] = it.next().unwrap();
 				}
 			}
@@ -440,19 +542,19 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 }
 
 fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
-	let mut tiles = [[0;4]; 256];
+	let mut tiles = [[0; 4]; 256];
 	let n = f.u8()? as usize;
 	#[allow(clippy::needless_range_loop)]
 	for i in 0..n {
 		tiles[i] = f.array::<4>()?;
 	}
-	for i in n..(n*2).min(256) {
-		let [a,b,c,d] = tiles[i-n];
-		tiles[i] = [b,a,d,c]; // x-flip
+	for i in n..(n * 2).min(256) {
+		let [a, b, c, d] = tiles[i - n];
+		tiles[i] = [b, a, d, c]; // x-flip
 	}
-	for i in n*2..(n*4).min(256) {
-		let [a,b,c,d] = tiles[i-n*2];
-		tiles[i] = [c,d,a,b]; // y-flip
+	for i in n * 2..(n * 4).min(256) {
+		let [a, b, c, d] = tiles[i - n * 2];
+		tiles[i] = [c, d, a, b]; // y-flip
 	}
 
 	let mut chunk = Vec::with_capacity(len);
@@ -476,15 +578,15 @@ fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 
 fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Error> {
 	fn nibbles(f: &mut Reader, out: &mut [u8]) -> Result<(), Error> {
-		for i in 0..out.len()/2 {
+		for i in 0..out.len() / 2 {
 			let x = f.u8()?;
-			out[2*i] = x >> 4;
-			out[2*i+1] = x & 15;
+			out[2 * i] = x >> 4;
+			out[2 * i + 1] = x & 15;
 		}
 		Ok(())
 	}
 
-	let mut ncolors = vec![0; ((height/8)*(width/16)) as usize];
+	let mut ncolors = vec![0; ((height / 8) * (width / 16)) as usize];
 	nibbles(f, &mut ncolors)?;
 	for a in &mut ncolors {
 		if *a != 0 {
@@ -496,9 +598,9 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 	let c = &mut Reader::new(f.slice(totalcolors)?);
 	let mode = f.u8()?;
 
-	let mut data = Vec::with_capacity((height*width) as usize);
+	let mut data = Vec::with_capacity((height * width) as usize);
 	for ncolors in ncolors {
-		let mut chunk = [0; 8*16];
+		let mut chunk = [0; 8 * 16];
 		if ncolors != 0 {
 			let colors = c.slice(ncolors as usize)?;
 			match mode {
@@ -506,36 +608,45 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Vec<u8>, Erro
 					nibbles(f, &mut chunk)?;
 					chunk = chunk.map(|a| colors[a as usize]);
 				}
-				1 => bail!(e::Todo { what: "obscure AFastMode2 subformat" }),
-				_ => {
-					match f.u8()? {
-						1 => {
-							let mut toggle = false;
-							#[allow(clippy::needless_range_loop)]
-							for j in 0..16 {
-								let mut pos = 0;
-								loop {
-									let m = f.u8()? as usize;
-									if m == 0xFF { break; }
-									if toggle {
-										chunk[pos..pos+m+1].fill(colors[j]);
-										pos += 2;
-									}
-									pos += m;
-									toggle = !toggle;
+				1 => bail!(e::Todo {
+					what: "obscure AFastMode2 subformat"
+				}),
+				_ => match f.u8()? {
+					1 => {
+						let mut toggle = false;
+						#[allow(clippy::needless_range_loop)]
+						for j in 0..16 {
+							let mut pos = 0;
+							loop {
+								let m = f.u8()? as usize;
+								if m == 0xFF {
+									break;
 								}
+								if toggle {
+									chunk[pos..pos + m + 1].fill(colors[j]);
+									pos += 2;
+								}
+								pos += m;
+								toggle = !toggle;
 							}
 						}
-						n => bail!(e::Todo { what: format!("obscure AFastMode2 subformat {n}") })
 					}
-				}
+					n => bail!(e::Todo {
+						what: format!("obscure AFastMode2 subformat {n}")
+					}),
+				},
 			}
 		}
 		data.extend(chunk);
 	}
 	ensure_end(c)?;
 
-	Ok(do_unswizzle(data, width as usize, height as usize, PFT::Pfp_1))
+	Ok(do_unswizzle(
+		data,
+		width as usize,
+		height as usize,
+		PFT::Pfp_1,
+	))
 }
 
 fn read_maybe_compressed(f: &mut Reader, comp: CT, len: usize) -> Result<Vec<u8>, Error> {
@@ -570,18 +681,24 @@ fn ensure_size(value: usize, expected: usize) -> Result<(), Error> {
 
 #[extend::ext(name = ReaderExt2)]
 pub impl Reader<'_> {
-	fn enum16<T>(&mut self, field: &'static str) -> Result<T, Error> where
-		T: TryFromPrimitive<Primitive=u16, Error=TryFromPrimitiveError<T>>,
+	fn enum16<T>(&mut self, field: &'static str) -> Result<T, Error>
+	where
+		T: TryFromPrimitive<Primitive = u16, Error = TryFromPrimitiveError<T>>,
 	{
-		Ok(T::try_from_primitive(self.u16()?)
-			.map_err(|e| e::Invalid { field, value: e.number }.build())?)
+		Ok(T::try_from_primitive(self.u16()?).map_err(|e| {
+			e::Invalid {
+				field,
+				value: e.number,
+			}
+			.build()
+		})?)
 	}
 
 	fn bool16(&mut self, field: &'static str) -> Result<bool, Error> {
 		match self.u16()? {
 			0 => Ok(false),
 			1 => Ok(true),
-			v => bail!(e::Invalid { field, value: v })
+			v => bail!(e::Invalid { field, value: v }),
 		}
 	}
 }

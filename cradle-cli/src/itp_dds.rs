@@ -1,6 +1,6 @@
-use std::io::{Write, Read};
+use std::io::{Read, Write};
 
-use cradle::itp::{Itp, ImageData, Palette, mipmaps};
+use cradle::itp::{mipmaps, ImageData, Itp, ItpRevision, Palette};
 use cradle_dds as dds;
 
 use strength_reduce::StrengthReducedU64 as SR64;
@@ -9,8 +9,17 @@ use crate::Args;
 
 pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result<()> {
 	let _ = args;
-	let Itp { status: _, width, height, ref data } = *itp;
-	let mut header = dds::Dds { height, width, ..dds::Dds::default() };
+	let Itp {
+		status: _,
+		width,
+		height,
+		ref data,
+	} = *itp;
+	let mut header = dds::Dds {
+		height,
+		width,
+		..dds::Dds::default()
+	};
 
 	let nmip = mipmaps(width, height, data.pixel_count()).count();
 	if nmip != 1 {
@@ -37,31 +46,21 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 				.collect()
 		}
 		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb32(data) => {
-			data.iter().copied()
-				.flat_map(u32::to_le_bytes)
-				.collect()
-		}
+		ImageData::Argb32(data) => data.iter().copied().flat_map(u32::to_le_bytes).collect(),
 		ImageData::Bc1(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT1";
-			data.iter().copied()
-				.flat_map(u64::to_le_bytes)
-				.collect()
+			data.iter().copied().flat_map(u64::to_le_bytes).collect()
 		}
 		ImageData::Bc2(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT3";
-			data.iter().copied()
-				.flat_map(u128::to_le_bytes)
-				.collect()
+			data.iter().copied().flat_map(u128::to_le_bytes).collect()
 		}
 		ImageData::Bc3(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT5";
-			data.iter().copied()
-				.flat_map(u128::to_le_bytes)
-				.collect()
+			data.iter().copied().flat_map(u128::to_le_bytes).collect()
 		}
 		ImageData::Bc7(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
@@ -70,9 +69,7 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 				dxgi_format: dds::DXGI_FORMAT::BC7_UNORM,
 				..dds::Dx10Header::default()
 			});
-			data.iter().copied()
-				.flat_map(u128::to_le_bytes)
-				.collect()
+			data.iter().copied().flat_map(u128::to_le_bytes).collect()
 		}
 	};
 
@@ -87,14 +84,20 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 	un_dxgi(&mut dds);
 	let pf = &dds.pixel_format;
 	let imgdata = if pf.flags & dds::DDPF::PALETTEINDEXED8 != 0 {
-		let mut palette = [0; 4*256];
+		let mut palette = [0; 4 * 256];
 		read.read_exact(&mut palette)?;
-		let mut palette = palette.array_chunks().copied()
+		let mut palette = palette
+			.array_chunks()
+			.copied()
 			.map(|[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))
 			.collect::<Vec<_>>();
 		let data = read_data(read, u8::from_le_bytes)?;
 
-		let max = data.iter().map(|a| *a as usize + 1).max().unwrap_or_default();
+		let max = data
+			.iter()
+			.map(|a| *a as usize + 1)
+			.max()
+			.unwrap_or_default();
 		while palette.len() > max && palette.last() == Some(&0) {
 			palette.pop();
 		}
@@ -109,18 +112,22 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 				let dx10 = dds.dx10.as_ref().unwrap();
 				use dds::DXGI_FORMAT as D;
 				match dx10.dxgi_format {
-					D::BC1_TYPELESS | D::BC1_UNORM | D::BC1_UNORM_SRGB =>
-						ImageData::Bc1(read_data(read, u64::from_le_bytes)?),
-					D::BC2_TYPELESS | D::BC2_UNORM | D::BC2_UNORM_SRGB =>
-						ImageData::Bc2(read_data(read, u128::from_le_bytes)?),
-					D::BC3_TYPELESS | D::BC3_UNORM | D::BC3_UNORM_SRGB =>
-						ImageData::Bc3(read_data(read, u128::from_le_bytes)?),
-					D::BC7_TYPELESS | D::BC7_UNORM | D::BC7_UNORM_SRGB =>
-						ImageData::Bc7(read_data(read, u128::from_le_bytes)?),
-					_ => eyre::bail!("I don't understand this dds (dxgi)")
+					D::BC1_TYPELESS | D::BC1_UNORM | D::BC1_UNORM_SRGB => {
+						ImageData::Bc1(read_data(read, u64::from_le_bytes)?)
+					}
+					D::BC2_TYPELESS | D::BC2_UNORM | D::BC2_UNORM_SRGB => {
+						ImageData::Bc2(read_data(read, u128::from_le_bytes)?)
+					}
+					D::BC3_TYPELESS | D::BC3_UNORM | D::BC3_UNORM_SRGB => {
+						ImageData::Bc3(read_data(read, u128::from_le_bytes)?)
+					}
+					D::BC7_TYPELESS | D::BC7_UNORM | D::BC7_UNORM_SRGB => {
+						ImageData::Bc7(read_data(read, u128::from_le_bytes)?)
+					}
+					_ => eyre::bail!("I don't understand this dds (dxgi)"),
 				}
 			}
-			_ => eyre::bail!("I don't understand this dds (fourcc)")
+			_ => eyre::bail!("I don't understand this dds (fourcc)"),
 		}
 	} else if pf.flags & dds::DDPF::RGB != 0 {
 		let cmask = (
@@ -131,15 +138,19 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 		);
 		match pf.bpp {
 			32 => ImageData::Argb32(read_data(read, |d| mask(cmask, u32::from_le_bytes(d)))?),
-			16 => ImageData::Argb32(read_data(read, |d| mask(cmask, u16::from_le_bytes(d) as u32))?),
-			8  => ImageData::Argb32(read_data(read, |d| mask(cmask, u8::from_le_bytes(d) as u32))?),
-			_ => eyre::bail!("I don't understand this dds (bbp)")
+			16 => ImageData::Argb32(read_data(read, |d| {
+				mask(cmask, u16::from_le_bytes(d) as u32)
+			})?),
+			8 => ImageData::Argb32(read_data(read, |d| {
+				mask(cmask, u8::from_le_bytes(d) as u32)
+			})?),
+			_ => eyre::bail!("I don't understand this dds (bbp)"),
 		}
 	} else {
 		eyre::bail!("I don't understand this dds")
 	};
 
-	Ok(Itp::new(cradle::itp::ItpRevision::V3, dds.width, dds.height, imgdata))
+	Ok(Itp::new(ItpRevision::V3, dds.width, dds.height, imgdata))
 }
 
 fn read_data<T, const N: usize>(
@@ -148,7 +159,9 @@ fn read_data<T, const N: usize>(
 ) -> Result<Vec<T>, eyre::Error> {
 	let mut data = Vec::new();
 	read.read_to_end(&mut data)?;
-	let data = data.array_chunks().copied()
+	let data = data
+		.array_chunks()
+		.copied()
 		.map(from_le_bytes)
 		.collect::<Vec<_>>();
 	Ok(data)
@@ -161,25 +174,28 @@ fn un_dxgi(dds: &mut dds::Dds) {
 		use dds::DXGI_FORMAT as D;
 		// Stole this table from Gimp
 		let mask = match dx10.dxgi_format {
-			D::B8G8R8A8_TYPELESS | D::B8G8R8A8_UNORM | D::B8G8R8A8_UNORM_SRGB =>
-				(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
-			D::B8G8R8X8_TYPELESS | D::B8G8R8X8_UNORM | D::B8G8R8X8_UNORM_SRGB =>
-				(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000),
-			D::R8G8B8A8_TYPELESS | D::R8G8B8A8_UNORM | D::R8G8B8A8_UNORM_SRGB |
-			D::R8G8B8A8_UINT | D::R8G8B8A8_SNORM | D::R8G8B8A8_SINT =>
-				(32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
-			D::B5G6R5_UNORM =>
-				(16, 0xF800, 0x07E0, 0x001F, 0x0000),
-			D::B5G5R5A1_UNORM =>
-				(16, 0x7C00, 0x03E0, 0x001F, 0x8000),
-			D::R10G10B10A2_TYPELESS | D::R10G10B10A2_UNORM | D::R10G10B10A2_UINT =>
-				(32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000),
-			D::A8_UNORM =>
-				(8, 0x00, 0x00, 0x00, 0xFF),
-			D::R8_TYPELESS | D::R8_UNORM | D::R8_UINT | D::R8_SNORM | D::R8_SINT =>
-				(8, 0xFF, 0x00, 0x00, 0x00),
-			D::B4G4R4A4_UNORM =>
-				(16, 0x0F00, 0x00F0, 0x000F, 0xF000),
+			D::B8G8R8A8_TYPELESS | D::B8G8R8A8_UNORM | D::B8G8R8A8_UNORM_SRGB => {
+				(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)
+			}
+			D::B8G8R8X8_TYPELESS | D::B8G8R8X8_UNORM | D::B8G8R8X8_UNORM_SRGB => {
+				(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000)
+			}
+			D::R8G8B8A8_TYPELESS
+			| D::R8G8B8A8_UNORM
+			| D::R8G8B8A8_UNORM_SRGB
+			| D::R8G8B8A8_UINT
+			| D::R8G8B8A8_SNORM
+			| D::R8G8B8A8_SINT => (32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000),
+			D::B5G6R5_UNORM => (16, 0xF800, 0x07E0, 0x001F, 0x0000),
+			D::B5G5R5A1_UNORM => (16, 0x7C00, 0x03E0, 0x001F, 0x8000),
+			D::R10G10B10A2_TYPELESS | D::R10G10B10A2_UNORM | D::R10G10B10A2_UINT => {
+				(32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000)
+			}
+			D::A8_UNORM => (8, 0x00, 0x00, 0x00, 0xFF),
+			D::R8_TYPELESS | D::R8_UNORM | D::R8_UINT | D::R8_SNORM | D::R8_SINT => {
+				(8, 0xFF, 0x00, 0x00, 0x00)
+			}
+			D::B4G4R4A4_UNORM => (16, 0x0F00, 0x00F0, 0x000F, 0xF000),
 			_ => return,
 		};
 		(pf.bpp, pf.rmask, pf.gmask, pf.bmask, pf.amask) = mask;
@@ -188,12 +204,7 @@ fn un_dxgi(dds: &mut dds::Dds) {
 }
 
 fn mask((r, g, b, a): (SR64, SR64, SR64, SR64), x: u32) -> u32 {
-	u32::from_le_bytes([
-		mask1(b, x),
-		mask1(g, x),
-		mask1(r, x),
-		mask1(a, x),
-	])
+	u32::from_le_bytes([mask1(b, x), mask1(g, x), mask1(r, x), mask1(a, x)])
 }
 
 fn sr64(mask: u32) -> SR64 {
@@ -214,10 +225,13 @@ fn test_mask() {
 	assert_eq!(mask1(sr64(0b011100000), 0b001100000), 0b01101101);
 	assert_eq!(mask1(sr64(0x00FE0000), 0xFEFEFEFE), 0xFF);
 	assert_eq!(mask1(sr64(0xFE000000), 0xFEFEFEFE), 0xFF);
-	assert_eq!(mask1(
-		sr64(0b00000111111111100000000000000000),
-		     0b11111110111111101111111011111110,
-	), 0b11011111);
+	assert_eq!(
+		mask1(
+			sr64(0b00000111111111100000000000000000),
+			0b11111110111111101111111011111110,
+		),
+		0b11011111
+	);
 }
 
 #[cfg(test)]
