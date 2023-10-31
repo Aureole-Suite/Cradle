@@ -34,16 +34,12 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 	let mut png = png::Encoder::new(w, img.width, img.height);
 	match &img.data {
 		ImageData::Argb32(data) => {
-			let data = data
-				.iter()
-				.flat_map(|argb| {
-					let [b, g, r, a] = argb.to_le_bytes();
-					[r, g, b, a]
-				})
-				.collect::<Vec<_>>();
 			png.set_color(png::ColorType::Rgba);
 			png.set_depth(png::BitDepth::Eight);
-			write_data(img, &data, 4, args, png)
+			write_data(img, data, args, png, |&argb| {
+				let [b, g, r, a] = argb.to_le_bytes();
+				[r, g, b, a]
+			})
 		}
 		ImageData::Indexed(palette, data) => {
 			let mut pal = Vec::with_capacity(3 * palette.len());
@@ -59,19 +55,19 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 			png.set_depth(png::BitDepth::Eight);
 			png.set_palette(pal);
 			png.set_trns(alp);
-			write_data(img, data, 1, args, png)
+			write_data(img, data, args, png, |&i| [i])
 		}
 	}
 }
 
-fn write_data(
+fn write_data<T, const N: usize>(
 	img: &Png,
-	data: &[u8],
-	bpp: usize,
+	data: &[T],
 	args: &Args,
 	mut png: png::Encoder<impl Write>,
+	mut f: impl FnMut(&T) -> [u8; N],
 ) -> Result<(), eyre::Error> {
-	let nmips = mipmaps(img.width, img.height, data.len() / bpp).count();
+	let nmips = mipmaps(img.width, img.height, data.len()).count();
 	if nmips > 1 && args.png_mipmap {
 		png.set_animated(nmips as u32, 0)?;
 		png.set_frame_delay(1, 1)?;
@@ -79,11 +75,16 @@ fn write_data(
 	}
 	let mut png = png.write_header()?;
 	let mut first = true;
-	for (w, h, range) in mipmaps(img.width, img.height, data.len() / bpp) {
+	for (w, h, range) in mipmaps(img.width, img.height, data.len()) {
 		if !std::mem::take(&mut first) {
 			png.set_frame_dimension(w, h)?;
 		}
-		png.write_image_data(&data[range.start * bpp..range.end * bpp])?;
+		png.write_image_data(
+			&data[range.start..range.end]
+				.iter()
+				.flat_map(&mut f)
+				.collect::<Vec<_>>(),
+		)?;
 		if nmips > 1 && !args.png_mipmap {
 			tracing::warn!("discarding mipmaps");
 			break;
