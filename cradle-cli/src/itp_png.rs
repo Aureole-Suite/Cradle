@@ -1,4 +1,7 @@
-use cradle::itp::{mipmaps, ImageData, Itp, ItpRevision, Palette};
+use cradle::{
+	itp::{ImageData, Itp, ItpRevision, Palette},
+	raster::Raster,
+};
 
 use crate::{png, Args};
 
@@ -17,31 +20,23 @@ pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<png::Png> {
 				Palette::External(_) => eyre::bail!("external palette is not currently supported"),
 			};
 			if args.png_no_palette {
-				PID::Argb32(data.iter().map(|a| pal[*a as usize]).collect::<Vec<_>>())
+				PID::Argb32(map(data, |i| i.map(|a| pal[*a as usize])))
 			} else {
 				PID::Indexed(pal.clone(), data.clone())
 			}
 		}
 		ID::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
 		ID::Argb32(data) => PID::Argb32(data.clone()),
-		ID::Bc1(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc1)),
-		ID::Bc2(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc2)),
-		ID::Bc3(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc3)),
-		ID::Bc7(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc7)),
+		ID::Bc1(data) => PID::Argb32(map(data, |i| decode(i, cradle_dxt::decode_bc1))),
+		ID::Bc2(data) => PID::Argb32(map(data, |i| decode(i, cradle_dxt::decode_bc2))),
+		ID::Bc3(data) => PID::Argb32(map(data, |i| decode(i, cradle_dxt::decode_bc3))),
+		ID::Bc7(data) => PID::Argb32(map(data, |i| decode(i, cradle_dxt::decode_bc7))),
 	};
 	Ok(png::Png {
 		width,
 		height,
 		data,
 	})
-}
-
-fn decode<T: Copy>(width: u32, height: u32, data: &[T], f: impl FnMut(T) -> [u32; 16]) -> Vec<u32> {
-	let mut data = data.iter().copied().flat_map(f).collect::<Vec<_>>();
-	for (w, h, range) in mipmaps(width, height, data.len()) {
-		cradle::permute::unswizzle(&mut data[range], h as usize, w as usize, 4, 4);
-	}
-	data
 }
 
 pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
@@ -52,16 +47,26 @@ pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
 	} = *png;
 	let data = match data {
 		png::ImageData::Argb32(data) => ImageData::Argb32(data.clone()),
-		png::ImageData::Indexed(pal, data) if args.png_no_palette => ImageData::Argb32(
-			data.iter()
-				.map(|i| *pal.get(*i as usize).unwrap_or(&0))
-				.collect(),
-		),
+		png::ImageData::Indexed(pal, data) if args.png_no_palette => {
+			ImageData::Argb32(map(data, |i| {
+				i.map(|a| *pal.get(*a as usize).unwrap_or(&0))
+			}))
+		}
 		png::ImageData::Indexed(pal, data) => {
 			ImageData::Indexed(Palette::Embedded(pal.clone()), data.clone())
 		}
 	};
 	Itp::new(ItpRevision::V3, width, height, data)
+}
+
+fn map<T, U>(data: &[T], f: impl FnMut(&T) -> U) -> Vec<U> {
+	data.iter().map(f).collect()
+}
+
+fn decode<T: Copy>(r: &Raster<T>, f: impl FnMut(T) -> [u32; 16]) -> Raster<u32> {
+	let mut data = r.as_slice().iter().copied().flat_map(f).collect::<Vec<_>>();
+	cradle::permute::unswizzle(&mut data, r.height() * 4, r.width() * 4, 4, 4);
+	Raster::new_with(r.width() * 4, r.height() * 4, data)
 }
 
 #[cfg(test)]

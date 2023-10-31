@@ -1,6 +1,9 @@
 use std::io::{Read, Write};
 
-use cradle::itp::{mipmaps, ImageData, Itp, ItpRevision, Palette};
+use cradle::{
+	itp::{ImageData, Itp, ItpRevision, Palette},
+	raster::Raster,
+};
 use cradle_dds as dds;
 
 use strength_reduce::StrengthReducedU64 as SR64;
@@ -21,13 +24,13 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 		..dds::Dds::default()
 	};
 
-	let nmip = mipmaps(width, height, data.pixel_count()).count();
+	let nmip = data.mipmaps();
 	if nmip != 1 {
 		header.flags |= dds::DDSD::MIPMAPCOUNT;
 		header.mip_map_count = nmip as u32;
 	}
 
-	let data: Vec<u8> = match &data {
+	match &data {
 		ImageData::Indexed(pal, data) => {
 			let pal = match pal {
 				Palette::Embedded(pal) => pal,
@@ -35,32 +38,42 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 			};
 			header.pixel_format.flags |= dds::DDPF::PALETTEINDEXED8;
 			header.pixel_format.bpp = 8;
+			header.write(&mut write)?;
 			let mut pal2 = [0; 256];
 			pal2[..pal.len()].copy_from_slice(pal);
-			pal2.iter()
-				.flat_map(|a| {
-					let [b, g, r, a] = u32::to_le_bytes(*a);
-					[r, g, b, a]
-				})
-				.chain(data.iter().copied())
-				.collect()
+			write.write_all(
+				&pal2
+					.iter()
+					.flat_map(|a| {
+						let [b, g, r, a] = u32::to_le_bytes(*a);
+						[r, g, b, a]
+					})
+					.collect::<Vec<_>>(),
+			)?;
+			write_data(write, data, u8::to_le_bytes)
 		}
 		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb32(data) => data.iter().copied().flat_map(u32::to_le_bytes).collect(),
+		ImageData::Argb32(data) => {
+			header.write(&mut write)?;
+			write_data(write, data, u32::to_le_bytes)
+		}
 		ImageData::Bc1(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT1";
-			data.iter().copied().flat_map(u64::to_le_bytes).collect()
+			header.write(&mut write)?;
+			write_data(write, data, u64::to_le_bytes)
 		}
 		ImageData::Bc2(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT3";
-			data.iter().copied().flat_map(u128::to_le_bytes).collect()
+			header.write(&mut write)?;
+			write_data(write, data, u128::to_le_bytes)
 		}
 		ImageData::Bc3(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
 			header.pixel_format.four_cc = *b"DXT5";
-			data.iter().copied().flat_map(u128::to_le_bytes).collect()
+			header.write(&mut write)?;
+			write_data(write, data, u128::to_le_bytes)
 		}
 		ImageData::Bc7(data) => {
 			header.pixel_format.flags |= dds::DDPF::FOURCC;
@@ -69,13 +82,10 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 				dxgi_format: dds::DXGI_FORMAT::BC7_UNORM,
 				..dds::Dx10Header::default()
 			});
-			data.iter().copied().flat_map(u128::to_le_bytes).collect()
+			header.write(&mut write)?;
+			write_data(write, data, u128::to_le_bytes)
 		}
-	};
-
-	header.write(&mut write)?;
-	write.write_all(&data)?;
-	Ok(())
+	}
 }
 
 pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
@@ -91,10 +101,11 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 			.copied()
 			.map(|[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))
 			.collect::<Vec<_>>();
-		let data = read_data(read, u8::from_le_bytes)?;
+		let data = read_data(read, &dds, 1, u8::from_le_bytes)?;
 
 		let max = data
 			.iter()
+			.flat_map(|a| a.as_slice())
 			.map(|a| *a as usize + 1)
 			.max()
 			.unwrap_or_default();
@@ -105,24 +116,24 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 		ImageData::Indexed(Palette::Embedded(palette), data)
 	} else if pf.flags & dds::DDPF::FOURCC != 0 {
 		match &pf.four_cc {
-			b"DXT1" => ImageData::Bc1(read_data(read, u64::from_le_bytes)?),
-			b"DXT3" => ImageData::Bc2(read_data(read, u128::from_le_bytes)?),
-			b"DXT5" => ImageData::Bc3(read_data(read, u128::from_le_bytes)?),
+			b"DXT1" => ImageData::Bc1(read_data(read, &dds, 4, u64::from_le_bytes)?),
+			b"DXT3" => ImageData::Bc2(read_data(read, &dds, 4, u128::from_le_bytes)?),
+			b"DXT5" => ImageData::Bc3(read_data(read, &dds, 4, u128::from_le_bytes)?),
 			b"DX10" => {
 				let dx10 = dds.dx10.as_ref().unwrap();
 				use dds::DXGI_FORMAT as D;
 				match dx10.dxgi_format {
 					D::BC1_TYPELESS | D::BC1_UNORM | D::BC1_UNORM_SRGB => {
-						ImageData::Bc1(read_data(read, u64::from_le_bytes)?)
+						ImageData::Bc1(read_data(read, &dds, 4, u64::from_le_bytes)?)
 					}
 					D::BC2_TYPELESS | D::BC2_UNORM | D::BC2_UNORM_SRGB => {
-						ImageData::Bc2(read_data(read, u128::from_le_bytes)?)
+						ImageData::Bc2(read_data(read, &dds, 4, u128::from_le_bytes)?)
 					}
 					D::BC3_TYPELESS | D::BC3_UNORM | D::BC3_UNORM_SRGB => {
-						ImageData::Bc3(read_data(read, u128::from_le_bytes)?)
+						ImageData::Bc3(read_data(read, &dds, 4, u128::from_le_bytes)?)
 					}
 					D::BC7_TYPELESS | D::BC7_UNORM | D::BC7_UNORM_SRGB => {
-						ImageData::Bc7(read_data(read, u128::from_le_bytes)?)
+						ImageData::Bc7(read_data(read, &dds, 4, u128::from_le_bytes)?)
 					}
 					_ => eyre::bail!("I don't understand this dds (dxgi)"),
 				}
@@ -137,11 +148,13 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 			sr64(pf.amask),
 		);
 		match pf.bpp {
-			32 => ImageData::Argb32(read_data(read, |d| mask(cmask, u32::from_le_bytes(d)))?),
-			16 => ImageData::Argb32(read_data(read, |d| {
+			32 => ImageData::Argb32(read_data(read, &dds, 1, |d| {
+				mask(cmask, u32::from_le_bytes(d))
+			})?),
+			16 => ImageData::Argb32(read_data(read, &dds, 1, |d| {
 				mask(cmask, u16::from_le_bytes(d) as u32)
 			})?),
-			8 => ImageData::Argb32(read_data(read, |d| {
+			8 => ImageData::Argb32(read_data(read, &dds, 1, |d| {
 				mask(cmask, u8::from_le_bytes(d) as u32)
 			})?),
 			_ => eyre::bail!("I don't understand this dds (bbp)"),
@@ -153,18 +166,40 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 	Ok(Itp::new(ItpRevision::V3, dds.width, dds.height, imgdata))
 }
 
+fn write_data<T: Copy, const N: usize>(
+	mut write: impl Write,
+	data: &[Raster<T>],
+	to_le_bytes: impl FnMut(T) -> [u8; N],
+) -> eyre::Result<()> {
+	Ok(write.write_all(
+		&data
+			.iter()
+			.flat_map(|a| a.as_slice())
+			.copied()
+			.flat_map(to_le_bytes)
+			.collect::<Vec<_>>(),
+	)?)
+}
+
 fn read_data<T, const N: usize>(
 	mut read: impl Read,
-	from_le_bytes: impl FnMut([u8; N]) -> T,
-) -> Result<Vec<T>, eyre::Error> {
-	let mut data = Vec::new();
-	read.read_to_end(&mut data)?;
-	let data = data
-		.array_chunks()
-		.copied()
-		.map(from_le_bytes)
-		.collect::<Vec<_>>();
-	Ok(data)
+	dds: &dds::Dds,
+	scale: usize,
+	mut from_le_bytes: impl FnMut([u8; N]) -> T,
+) -> eyre::Result<Vec<Raster<T>>> {
+	let mut out = Vec::new();
+	for i in 0..dds.mip_map_count as usize {
+		let w = (dds.width as usize >> i) / scale;
+		let h = (dds.height as usize >> i) / scale;
+		let mut data = vec![0; w * h * N];
+		read.read_exact(&mut data)?;
+		out.push(Raster::new_with(
+			w,
+			h,
+			data.array_chunks().map(|a| from_le_bytes(*a)).collect(),
+		))
+	}
+	Ok(out)
 }
 
 fn un_dxgi(dds: &mut dds::Dds) {

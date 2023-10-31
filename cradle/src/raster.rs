@@ -44,6 +44,10 @@ impl<T> Raster<T> {
 	pub fn as_slice(&self) -> &[T] {
 		&self.data
 	}
+
+	pub fn map<U>(&self, f: impl FnMut(&T) -> U) -> Raster<U> {
+		Raster::new_with(self.width, self.height, self.data.iter().map(f).collect())
+	}
 }
 
 impl<T> std::ops::Index<[usize; 2]> for Raster<T> {
