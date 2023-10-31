@@ -32,10 +32,9 @@ impl std::fmt::Debug for ImageData {
 
 pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 	let mut png = png::Encoder::new(w, img.width, img.height);
-	let _data;
-	let (data, bpp) = match &img.data {
+	match &img.data {
 		ImageData::Argb32(data) => {
-			_data = data
+			let data = data
 				.iter()
 				.flat_map(|argb| {
 					let [b, g, r, a] = argb.to_le_bytes();
@@ -44,7 +43,7 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 				.collect::<Vec<_>>();
 			png.set_color(png::ColorType::Rgba);
 			png.set_depth(png::BitDepth::Eight);
-			(&_data, 4)
+			write_data(img, &data, 4, args, png)?;
 		}
 		ImageData::Indexed(palette, data) => {
 			let mut pal = Vec::with_capacity(3 * palette.len());
@@ -60,10 +59,20 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 			png.set_depth(png::BitDepth::Eight);
 			png.set_palette(pal);
 			png.set_trns(alp);
-			(data, 1)
+			write_data(img, data, 1, args, png)?;
 		}
 	};
 
+	Ok(())
+}
+
+fn write_data(
+	img: &Png,
+	data: &[u8],
+	bpp: usize,
+	args: &Args,
+	mut png: png::Encoder<impl Write>,
+) -> Result<(), eyre::Error> {
 	let nmips = mipmaps(img.width, img.height, data.len() / bpp).count();
 	if nmips > 1 && args.png_mipmap {
 		png.set_animated(nmips as u32, 0)?;
