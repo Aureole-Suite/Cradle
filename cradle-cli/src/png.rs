@@ -36,7 +36,7 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 		ImageData::Argb32(data) => {
 			png.set_color(png::ColorType::Rgba);
 			png.set_depth(png::BitDepth::Eight);
-			write_data(img, data, args, png, |&argb| {
+			write_frames(img, data, args, png, |&argb| {
 				let [b, g, r, a] = argb.to_le_bytes();
 				[r, g, b, a]
 			})
@@ -55,12 +55,12 @@ pub fn write(args: &Args, w: impl Write, img: &Png) -> eyre::Result<()> {
 			png.set_depth(png::BitDepth::Eight);
 			png.set_palette(pal);
 			png.set_trns(alp);
-			write_data(img, data, args, png, |&i| [i])
+			write_frames(img, data, args, png, |&i| [i])
 		}
 	}
 }
 
-fn write_data<T, const N: usize>(
+fn write_frames<T, const N: usize>(
 	img: &Png,
 	data: &[T],
 	args: &Args,
