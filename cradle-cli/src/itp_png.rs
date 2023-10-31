@@ -37,32 +37,25 @@ pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<Png> {
 		height,
 		ref data,
 	} = *itp;
+	use {ImageData as ID, PngImageData as PID};
 	let data = match data {
-		ImageData::Indexed(pal, data) => {
+		ID::Indexed(pal, data) => {
 			let pal = match pal {
 				Palette::Embedded(pal) => pal,
 				Palette::External(_) => eyre::bail!("external palette is not currently supported"),
 			};
 			if args.png_no_palette {
-				PngImageData::Argb32(data.iter().map(|a| pal[*a as usize]).collect::<Vec<_>>())
+				PID::Argb32(data.iter().map(|a| pal[*a as usize]).collect::<Vec<_>>())
 			} else {
-				PngImageData::Indexed(pal.clone(), data.clone())
+				PID::Indexed(pal.clone(), data.clone())
 			}
 		}
-		ImageData::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
-		ImageData::Argb32(data) => PngImageData::Argb32(data.clone()),
-		ImageData::Bc1(data) => {
-			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc1))
-		}
-		ImageData::Bc2(data) => {
-			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc2))
-		}
-		ImageData::Bc3(data) => {
-			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc3))
-		}
-		ImageData::Bc7(data) => {
-			PngImageData::Argb32(decode(width, height, data, cradle_dxt::decode_bc7))
-		}
+		ID::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
+		ID::Argb32(data) => PID::Argb32(data.clone()),
+		ID::Bc1(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc1)),
+		ID::Bc2(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc2)),
+		ID::Bc3(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc3)),
+		ID::Bc7(data) => PID::Argb32(decode(width, height, data, cradle_dxt::decode_bc7)),
 	};
 	Ok(Png {
 		width,
