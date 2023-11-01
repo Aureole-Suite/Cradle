@@ -118,9 +118,7 @@ pub fn read(f: impl Read) -> eyre::Result<Png> {
 		})?),
 	};
 
-	Ok(Png {
-		data,
-	})
+	Ok(Png { data })
 }
 
 fn read_frames<R: Read, T, const N: usize>(

@@ -11,8 +11,6 @@ pub use write::Error as WriteError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Itp {
 	pub status: ItpStatus,
-	pub width: usize,
-	pub height: usize,
 	pub data: ImageData,
 }
 
@@ -25,6 +23,32 @@ pub enum ImageData {
 	Bc2(Vec<Raster<u128>>),
 	Bc3(Vec<Raster<u128>>),
 	Bc7(Vec<Raster<u128>>),
+}
+
+impl ImageData {
+	pub fn width(&self) -> usize {
+		match self {
+			ImageData::Indexed(_, d) => d[0].width(),
+			ImageData::Argb16(_, d) => d[0].width(),
+			ImageData::Argb32(d) => d[0].width(),
+			ImageData::Bc1(d) => d[0].width() * 4,
+			ImageData::Bc2(d) => d[0].width() * 4,
+			ImageData::Bc3(d) => d[0].width() * 4,
+			ImageData::Bc7(d) => d[0].width() * 4,
+		}
+	}
+
+	pub fn height(&self) -> usize {
+		match self {
+			ImageData::Indexed(_, d) => d[0].height(),
+			ImageData::Argb16(_, d) => d[0].height(),
+			ImageData::Argb32(d) => d[0].height(),
+			ImageData::Bc1(d) => d[0].height() * 4,
+			ImageData::Bc2(d) => d[0].height() * 4,
+			ImageData::Bc3(d) => d[0].height() * 4,
+			ImageData::Bc7(d) => d[0].height() * 4,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,7 +191,7 @@ fn show_fourcc(fourcc: [u8; 4]) -> String {
 }
 
 impl Itp {
-	pub fn new(itp_revision: IR, width: usize, height: usize, data: ImageData) -> Itp {
+	pub fn new(itp_revision: IR, data: ImageData) -> Itp {
 		let (base_format, pixel_bit_format) = match &data {
 			ImageData::Indexed(_, _) => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
 			ImageData::Argb16(A16::Mode1, _) => (BFT::Argb16, PBFT::Argb16_1),
@@ -194,8 +218,6 @@ impl Itp {
 				},
 				use_alpha: None,
 			},
-			width,
-			height,
 			data,
 		}
 	}

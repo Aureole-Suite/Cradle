@@ -26,9 +26,7 @@ pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<png::Png> {
 		ID::Bc3(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc3))),
 		ID::Bc7(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc7))),
 	};
-	Ok(png::Png {
-		data,
-	})
+	Ok(png::Png { data })
 }
 
 pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
@@ -44,12 +42,7 @@ pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
 			map(args, data, |i| i.clone()),
 		),
 	};
-	Itp::new(
-		ItpRevision::V3,
-		png.data.width(),
-		png.data.height(),
-		data,
-	)
+	Itp::new(ItpRevision::V3, data)
 }
 
 fn map<T, U>(

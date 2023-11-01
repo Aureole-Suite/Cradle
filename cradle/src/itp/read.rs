@@ -138,12 +138,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 
 	read_idat(f, &status, &mut data, width, height)?;
 
-	Ok(Itp {
-		status,
-		width,
-		height,
-		data,
-	})
+	Ok(Itp { status, data })
 }
 
 pub fn read_size(f: &mut Reader) -> Result<(usize, usize), Error> {
@@ -285,12 +280,7 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		}
 	);
 
-	Ok(Itp {
-		status,
-		width,
-		height,
-		data,
-	})
+	Ok(Itp { status, data })
 }
 
 fn status_from_flags(f: u32) -> Result<ItpStatus, Error> {
@@ -521,8 +511,6 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 
 	Ok(Itp {
 		status,
-		width: w,
-		height: h,
 		data: ImageData::Indexed(pal, vec![pixels]),
 	})
 }

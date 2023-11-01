@@ -14,13 +14,11 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 	let _ = args;
 	let Itp {
 		status: _,
-		width,
-		height,
 		ref data,
 	} = *itp;
 	let mut header = dds::Dds {
-		width: width as u32,
-		height: height as u32,
+		width: data.width() as u32,
+		height: data.height() as u32,
 		..dds::Dds::default()
 	};
 
@@ -163,12 +161,7 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 		eyre::bail!("I don't understand this dds")
 	};
 
-	Ok(Itp::new(
-		ItpRevision::V3,
-		dds.width as usize,
-		dds.height as usize,
-		data,
-	))
+	Ok(Itp::new(ItpRevision::V3, data))
 }
 
 fn write_data<T: Copy, const N: usize>(
