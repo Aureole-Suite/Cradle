@@ -222,7 +222,7 @@ fn from_itp(
 	} else {
 		let output = output.with_extension("png");
 		let f = std::fs::File::create(&output)?;
-		let png = itp_png::itp_to_png(args, &itp)?;
+		let png = itp_png::itp_to_png(args, itp)?;
 		png::write(f, &png)?;
 		Ok(output)
 	}
