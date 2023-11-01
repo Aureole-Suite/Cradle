@@ -5,3 +5,4 @@
 pub mod itc;
 pub mod itp;
 pub mod permute;
+pub mod raster;
