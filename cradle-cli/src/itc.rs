@@ -106,8 +106,8 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 				let mut png = crate::itp_png::itp_to_png(args, &itp)?;
 				if !args.itc_no_pad {
 					let _span = tracing::info_span!("pad").entered();
-					if (xo - xo.round()).abs() < f32::EPSILON
-						&& (yo - yo.round()).abs() < f32::EPSILON
+					if (xo - xo.round()).abs() < 0.1 / w as f32
+						&& (yo - yo.round()).abs() < 0.1 / h as f32
 					{
 						pad(
 							&mut png,
@@ -225,7 +225,7 @@ fn do_pad<T: Clone + Default>(
 		let mut dst = Raster::splat(width, height, data[[0, 0]].clone());
 		for x0 in 0..data.width() {
 			for y0 in 0..data.height() {
-				dst[[x + x0, y + y0]] = data[[x, y]].clone()
+				dst[[x + x0, y + y0]] = data[[x0, y0]].clone()
 			}
 		}
 		*data = dst;
