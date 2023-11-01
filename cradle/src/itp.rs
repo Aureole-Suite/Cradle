@@ -14,6 +14,15 @@ pub struct Itp {
 	pub data: ImageData,
 }
 
+impl Itp {
+	pub fn new(itp_revision: IR, data: ImageData) -> Itp {
+		Itp {
+			status: ItpStatus::default_for(itp_revision, &data),
+			data,
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageData {
 	Indexed(Palette, Vec<Raster<u8>>),
@@ -49,6 +58,18 @@ impl ImageData {
 			ImageData::Bc7(d) => d[0].height() * 4,
 		}
 	}
+
+	pub fn mipmaps(&self) -> usize {
+		match self {
+			ImageData::Indexed(_, d) => d.len(),
+			ImageData::Argb16(_, d) => d.len(),
+			ImageData::Argb32(d) => d.len(),
+			ImageData::Bc1(d) => d.len(),
+			ImageData::Bc2(d) => d.len(),
+			ImageData::Bc3(d) => d.len(),
+			ImageData::Bc7(d) => d.len(),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +95,36 @@ pub struct ItpStatus {
 	pub multi_plane: MultiPlaneType,
 	pub mipmap: MipmapType,
 	pub use_alpha: Option<bool>,
+}
+
+impl ItpStatus {
+	pub fn default_for(itp_revision: ItpRevision, data: &ImageData) -> ItpStatus {
+		let (base_format, pixel_bit_format) = match &data {
+			ImageData::Indexed(_, _) => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
+			ImageData::Argb16(A16::Mode1, _) => (BFT::Argb16, PBFT::Argb16_1),
+			ImageData::Argb16(A16::Mode2, _) => (BFT::Argb16, PBFT::Argb16_2),
+			ImageData::Argb16(A16::Mode3, _) => (BFT::Argb16, PBFT::Argb16_3),
+			ImageData::Argb32(_) => (BFT::Argb32, PBFT::Argb32),
+			ImageData::Bc1(_) => (BFT::Bc1, PBFT::Compressed),
+			ImageData::Bc2(_) => (BFT::Bc2, PBFT::Compressed),
+			ImageData::Bc3(_) => (BFT::Bc3, PBFT::Compressed),
+			ImageData::Bc7(_) => (BFT::Bc7, PBFT::Compressed),
+		};
+		ItpStatus {
+			itp_revision,
+			base_format,
+			compression: CT::None,
+			pixel_format: PFT::Linear,
+			pixel_bit_format,
+			multi_plane: MPT::None,
+			mipmap: if data.mipmaps() > 1 {
+				MT::Mipmap_1
+			} else {
+				MT::None
+			},
+			use_alpha: None,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, TryFromPrimitive)]
@@ -188,53 +239,6 @@ fn show_fourcc(fourcc: [u8; 4]) -> String {
 		.flat_map(|a| std::ascii::escape_default(*a))
 		.map(char::from)
 		.collect()
-}
-
-impl Itp {
-	pub fn new(itp_revision: IR, data: ImageData) -> Itp {
-		let (base_format, pixel_bit_format) = match &data {
-			ImageData::Indexed(_, _) => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
-			ImageData::Argb16(A16::Mode1, _) => (BFT::Argb16, PBFT::Argb16_1),
-			ImageData::Argb16(A16::Mode2, _) => (BFT::Argb16, PBFT::Argb16_2),
-			ImageData::Argb16(A16::Mode3, _) => (BFT::Argb16, PBFT::Argb16_3),
-			ImageData::Argb32(_) => (BFT::Argb32, PBFT::Argb32),
-			ImageData::Bc1(_) => (BFT::Bc1, PBFT::Compressed),
-			ImageData::Bc2(_) => (BFT::Bc2, PBFT::Compressed),
-			ImageData::Bc3(_) => (BFT::Bc3, PBFT::Compressed),
-			ImageData::Bc7(_) => (BFT::Bc7, PBFT::Compressed),
-		};
-		Itp {
-			status: ItpStatus {
-				itp_revision,
-				base_format,
-				compression: CT::None,
-				pixel_format: PFT::Linear,
-				pixel_bit_format,
-				multi_plane: MPT::None,
-				mipmap: if data.mipmaps() > 1 {
-					MT::Mipmap_1
-				} else {
-					MT::None
-				},
-				use_alpha: None,
-			},
-			data,
-		}
-	}
-}
-
-impl ImageData {
-	pub fn mipmaps(&self) -> usize {
-		match self {
-			ImageData::Indexed(_, d) => d.len(),
-			ImageData::Argb16(_, d) => d.len(),
-			ImageData::Argb32(d) => d.len(),
-			ImageData::Bc1(d) => d.len(),
-			ImageData::Bc2(d) => d.len(),
-			ImageData::Bc3(d) => d.len(),
-			ImageData::Bc7(d) => d.len(),
-		}
-	}
 }
 
 #[cfg(test)]
