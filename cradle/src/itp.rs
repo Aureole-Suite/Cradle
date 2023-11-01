@@ -11,8 +11,8 @@ pub use write::Error as WriteError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Itp {
 	pub status: ItpStatus,
-	pub width: u32,
-	pub height: u32,
+	pub width: usize,
+	pub height: usize,
 	pub data: ImageData,
 }
 
@@ -163,7 +163,7 @@ fn show_fourcc(fourcc: [u8; 4]) -> String {
 }
 
 impl Itp {
-	pub fn new(itp_revision: IR, width: u32, height: u32, data: ImageData) -> Itp {
+	pub fn new(itp_revision: IR, width: usize, height: usize, data: ImageData) -> Itp {
 		let (base_format, pixel_bit_format) = match &data {
 			ImageData::Indexed(_, _) => (BFT::Indexed1, PBFT::Indexed), // Indexed2/3 not supported
 			ImageData::Argb16(A16::Mode1, _) => (BFT::Argb16, PBFT::Argb16_1),

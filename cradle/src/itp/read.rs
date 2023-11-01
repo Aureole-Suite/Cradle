@@ -124,8 +124,8 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 
 	// Formats indexed1 and 2 seem to have a check for width == 0 here.
 	// Seems to be something with palette, but no idea what.
-	let width = f.u32()?;
-	let height = f.u32()?;
+	let width = f.u32()? as usize;
+	let height = f.u32()? as usize;
 
 	if let ImageData::Indexed(pal, _) = &mut data {
 		let pal_size = if matches!(head, 1000 | 1002) {
@@ -165,8 +165,8 @@ fn read_revision_3(f: &mut Reader) -> Result<Itp, Error> {
 		match &fourcc {
 			b"IHDR" => {
 				f.check_u32(32)?;
-				width = f.u32()?;
-				height = f.u32()?;
+				width = f.u32()? as usize;
+				height = f.u32()? as usize;
 				file_size = f.u32()? as usize;
 				status.itp_revision = f.enum16("IHDR.itp_revision")?;
 				status.base_format = f.enum16("IHDR.base_format")?;
@@ -367,17 +367,17 @@ fn read_idat(
 	f: &mut Reader,
 	status: &ItpStatus,
 	data: &mut ImageData,
-	w: u32,
-	h: u32,
+	w: usize,
+	h: usize,
 ) -> Result<(), Error> {
 	fn raster<T, const N: usize>(
 		f: &mut Reader,
 		status: &ItpStatus,
-		w: u32,
-		h: u32,
+		w: usize,
+		h: usize,
 		from_le_bytes: fn([u8; N]) -> T,
 	) -> Result<Raster<T>, Error> {
-		let data = read_maybe_compressed(f, status.compression, (w * h) as usize * N)?;
+		let data = read_maybe_compressed(f, status.compression, w * h * N)?;
 		let data = data.array_chunks().copied().map(from_le_bytes).collect();
 		Ok(do_unswizzle(data, w, h, status.pixel_format))
 	}
@@ -408,9 +408,7 @@ fn read_idat(
 	Ok(())
 }
 
-fn do_unswizzle<T>(mut data: Vec<T>, width: u32, height: u32, pixel_format: PFT) -> Raster<T> {
-	let width = width as usize;
-	let height = height as usize;
+fn do_unswizzle<T>(mut data: Vec<T>, width: usize, height: usize, pixel_format: PFT) -> Raster<T> {
 	match pixel_format {
 		PFT::Linear => {}
 		PFT::Pfp_1 => permute::unswizzle(&mut data, height, width, 8, 16),
@@ -487,8 +485,8 @@ fn read_ccpi(f: &mut Reader, mut status: ItpStatus) -> Result<Itp, Error> {
 
 	Ok(Itp {
 		status,
-		width: w as u32,
-		height: h as u32,
+		width: w,
+		height: h,
 		data: ImageData::Indexed(pal, vec![pixels]),
 	})
 }
@@ -528,7 +526,7 @@ fn read_ccpi_chunk(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
 	Ok(chunk)
 }
 
-fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Raster<u8>, Error> {
+fn a_fast_mode2(f: &mut Reader, width: usize, height: usize) -> Result<Raster<u8>, Error> {
 	fn nibbles(f: &mut Reader, out: &mut [u8]) -> Result<(), Error> {
 		for i in 0..out.len() / 2 {
 			let x = f.u8()?;
@@ -538,7 +536,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Raster<u8>, E
 		Ok(())
 	}
 
-	let mut ncolors = vec![0; ((height / 8) * (width / 16)) as usize];
+	let mut ncolors = vec![0; (height / 8) * (width / 16)];
 	nibbles(f, &mut ncolors)?;
 	for a in &mut ncolors {
 		if *a != 0 {
@@ -550,7 +548,7 @@ fn a_fast_mode2(f: &mut Reader, width: u32, height: u32) -> Result<Raster<u8>, E
 	let c = &mut Reader::new(f.slice(totalcolors)?);
 	let mode = f.u8()?;
 
-	let mut data = Vec::with_capacity((height * width) as usize);
+	let mut data = Vec::with_capacity(height * width);
 	for ncolors in ncolors {
 		let mut chunk = [0; 8 * 16];
 		if ncolors != 0 {

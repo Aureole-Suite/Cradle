@@ -4,8 +4,8 @@ use cradle::raster::Raster;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Png {
-	pub width: u32,
-	pub height: u32,
+	pub width: usize,
+	pub height: usize,
 	pub data: ImageData,
 }
 
@@ -16,7 +16,7 @@ pub enum ImageData {
 }
 
 pub fn write(w: impl Write, img: &Png) -> eyre::Result<()> {
-	let mut png = png::Encoder::new(w, img.width, img.height);
+	let mut png = png::Encoder::new(w, img.width as u32, img.height as u32);
 	match &img.data {
 		ImageData::Argb32(data) => {
 			png.set_color(png::ColorType::Rgba);
@@ -75,8 +75,8 @@ pub fn read(f: impl Read) -> eyre::Result<Png> {
 		"only 8-bit png is supported"
 	);
 
-	let width = png.info().width;
-	let height = png.info().height;
+	let width = png.info().width as usize;
+	let height = png.info().height as usize;
 
 	let pal = png.info().palette.as_ref().map(|pal| {
 		let mut pal = pal

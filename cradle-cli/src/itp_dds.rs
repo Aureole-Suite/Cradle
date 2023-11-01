@@ -19,8 +19,8 @@ pub fn itp_to_dds(args: &Args, mut write: impl Write, itp: &Itp) -> eyre::Result
 		ref data,
 	} = *itp;
 	let mut header = dds::Dds {
-		height,
-		width,
+		width: width as u32,
+		height: height as u32,
 		..dds::Dds::default()
 	};
 
@@ -93,7 +93,7 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 	let mut dds = dds::Dds::read(&mut read)?;
 	un_dxgi(&mut dds);
 	let pf = &dds.pixel_format;
-	let imgdata = if pf.flags & dds::DDPF::PALETTEINDEXED8 != 0 {
+	let data = if pf.flags & dds::DDPF::PALETTEINDEXED8 != 0 {
 		let mut palette = [0; 4 * 256];
 		read.read_exact(&mut palette)?;
 		let mut palette = palette
@@ -163,7 +163,12 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 		eyre::bail!("I don't understand this dds")
 	};
 
-	Ok(Itp::new(ItpRevision::V3, dds.width, dds.height, imgdata))
+	Ok(Itp::new(
+		ItpRevision::V3,
+		dds.width as usize,
+		dds.height as usize,
+		data,
+	))
 }
 
 fn write_data<T: Copy, const N: usize>(

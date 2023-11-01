@@ -6,14 +6,8 @@ use cradle::{
 use crate::{png, Args};
 
 pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<png::Png> {
-	let Itp {
-		status: _,
-		width,
-		height,
-		ref data,
-	} = *itp;
 	use {png::ImageData as PID, ImageData as ID};
-	let data = match data {
+	let data = match &itp.data {
 		ID::Indexed(pal, data) => {
 			let pal = match pal {
 				Palette::Embedded(pal) => pal,
@@ -33,19 +27,14 @@ pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<png::Png> {
 		ID::Bc7(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc7))),
 	};
 	Ok(png::Png {
-		width,
-		height,
+		width: itp.width,
+		height: itp.height,
 		data,
 	})
 }
 
 pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
-	let png::Png {
-		width,
-		height,
-		ref data,
-	} = *png;
-	let data = match data {
+	let data = match &png.data {
 		png::ImageData::Argb32(data) => ImageData::Argb32(map(args, data, |i| i.clone())),
 		png::ImageData::Indexed(pal, data) if args.png_no_palette => {
 			ImageData::Argb32(map(args, data, |i| {
@@ -57,7 +46,12 @@ pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
 			map(args, data, |i| i.clone()),
 		),
 	};
-	Itp::new(ItpRevision::V3, width, height, data)
+	Itp::new(
+		ItpRevision::V3,
+		png.width as usize,
+		png.height as usize,
+		data,
+	)
 }
 
 fn map<T, U>(

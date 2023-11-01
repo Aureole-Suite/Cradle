@@ -77,8 +77,8 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 	if status.base_format == BFT::Indexed3 {
 		f.slice(&write_ccpi(itp)?);
 	} else {
-		f.u32(width);
-		f.u32(height);
+		f.u32(width as u32);
+		f.u32(height as u32);
 
 		if let ImageData::Indexed(pal, _) = data {
 			let fixed_size = matches!(head, 1000 | 1002);
@@ -121,8 +121,8 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 	chunk(&mut f, b"IHDR", {
 		let mut f = Writer::new();
 		f.u32(32);
-		f.u32(width);
-		f.u32(height);
+		f.u32(width as u32);
+		f.u32(height as u32);
 		f.diff32(start, end);
 		f.u16(status.itp_revision as u16);
 		f.u16(status.base_format as u16);
