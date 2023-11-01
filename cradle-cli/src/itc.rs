@@ -245,8 +245,6 @@ fn do_crop<T: PartialEq>(
 
 fn make_png<T>(data: Vec<Raster<T>>, f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData) -> png::Png {
 	png::Png {
-		width: data[0].width(),
-		height: data[0].height(),
 		data: f(data),
 	}
 }

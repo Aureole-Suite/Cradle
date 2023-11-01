@@ -4,8 +4,6 @@ use cradle::raster::Raster;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Png {
-	pub width: usize,
-	pub height: usize,
 	pub data: ImageData,
 }
 
@@ -15,8 +13,24 @@ pub enum ImageData {
 	Indexed(Vec<u32>, Vec<Raster<u8>>),
 }
 
+impl ImageData {
+	pub fn width(&self) -> usize {
+		match self {
+			ImageData::Argb32(d) => d[0].width(),
+			ImageData::Indexed(_, d) => d[0].width(),
+		}
+	}
+
+	pub fn height(&self) -> usize {
+		match self {
+			ImageData::Argb32(d) => d[0].height(),
+			ImageData::Indexed(_, d) => d[0].height(),
+		}
+	}
+}
+
 pub fn write(w: impl Write, img: &Png) -> eyre::Result<()> {
-	let mut png = png::Encoder::new(w, img.width as u32, img.height as u32);
+	let mut png = png::Encoder::new(w, img.data.width() as u32, img.data.height() as u32);
 	match &img.data {
 		ImageData::Argb32(data) => {
 			png.set_color(png::ColorType::Rgba);
@@ -75,9 +89,6 @@ pub fn read(f: impl Read) -> eyre::Result<Png> {
 		"only 8-bit png is supported"
 	);
 
-	let width = png.info().width as usize;
-	let height = png.info().height as usize;
-
 	let pal = png.info().palette.as_ref().map(|pal| {
 		let mut pal = pal
 			.array_chunks()
@@ -108,8 +119,6 @@ pub fn read(f: impl Read) -> eyre::Result<Png> {
 	};
 
 	Ok(Png {
-		width,
-		height,
 		data,
 	})
 }

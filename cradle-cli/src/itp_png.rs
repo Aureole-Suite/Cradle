@@ -27,8 +27,6 @@ pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<png::Png> {
 		ID::Bc7(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc7))),
 	};
 	Ok(png::Png {
-		width: itp.width,
-		height: itp.height,
 		data,
 	})
 }
@@ -48,8 +46,8 @@ pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
 	};
 	Itp::new(
 		ItpRevision::V3,
-		png.width as usize,
-		png.height as usize,
+		png.data.width(),
+		png.data.height(),
 		data,
 	)
 }
