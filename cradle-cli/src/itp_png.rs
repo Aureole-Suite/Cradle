@@ -3,41 +3,39 @@ use cradle::{
 	raster::Raster,
 };
 
-use crate::{png, Args};
+use crate::png::{self, Png};
+use crate::Args;
 
 pub fn itp_to_png(args: &Args, itp: &Itp) -> eyre::Result<png::Png> {
-	use {png::ImageData as PID, ImageData as ID};
-	let data = match &itp.data {
+	use ImageData as ID;
+	Ok(match &itp.data {
 		ID::Indexed(pal, data) => {
 			let pal = match pal {
 				Palette::Embedded(pal) => pal,
 				Palette::External(_) => eyre::bail!("external palette is not currently supported"),
 			};
 			if args.png_no_palette {
-				PID::Argb32(map(args, data, |i| i.map(|a| pal[*a as usize])))
+				Png::Argb32(map(args, data, |i| i.map(|a| pal[*a as usize])))
 			} else {
-				PID::Indexed(pal.clone(), map(args, data, |i| i.clone()))
+				Png::Indexed(pal.clone(), map(args, data, |i| i.clone()))
 			}
 		}
 		ID::Argb16(_, _) => eyre::bail!("16-bit color is not currently supported"),
-		ID::Argb32(data) => PID::Argb32(map(args, data, |i| i.clone())),
-		ID::Bc1(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc1))),
-		ID::Bc2(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc2))),
-		ID::Bc3(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc3))),
-		ID::Bc7(data) => PID::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc7))),
-	};
-	Ok(png::Png { data })
+		ID::Argb32(data) => Png::Argb32(map(args, data, |i| i.clone())),
+		ID::Bc1(data) => Png::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc1))),
+		ID::Bc2(data) => Png::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc2))),
+		ID::Bc3(data) => Png::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc3))),
+		ID::Bc7(data) => Png::Argb32(map(args, data, |i| decode(i, cradle_dxt::decode_bc7))),
+	})
 }
 
 pub fn png_to_itp(args: &Args, png: &png::Png) -> Itp {
-	let data = match &png.data {
-		png::ImageData::Argb32(data) => ImageData::Argb32(map(args, data, |i| i.clone())),
-		png::ImageData::Indexed(pal, data) if args.png_no_palette => {
-			ImageData::Argb32(map(args, data, |i| {
-				i.map(|a| *pal.get(*a as usize).unwrap_or(&0))
-			}))
-		}
-		png::ImageData::Indexed(pal, data) => ImageData::Indexed(
+	let data = match png {
+		Png::Argb32(data) => ImageData::Argb32(map(args, data, |i| i.clone())),
+		Png::Indexed(pal, data) if args.png_no_palette => ImageData::Argb32(map(args, data, |i| {
+			i.map(|a| *pal.get(*a as usize).unwrap_or(&0))
+		})),
+		Png::Indexed(pal, data) => ImageData::Indexed(
 			Palette::Embedded(pal.clone()),
 			map(args, data, |i| i.clone()),
 		),

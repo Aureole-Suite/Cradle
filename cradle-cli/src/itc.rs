@@ -192,18 +192,16 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 }
 
 fn pad(png: png::Png, x: isize, y: isize, w: usize, h: usize) -> png::Png {
-	match png.data {
-		png::ImageData::Argb32(data) => do_pad(data, x, y, w, h, png::ImageData::Argb32),
-		png::ImageData::Indexed(pal, data) => {
-			do_pad(data, x, y, w, h, |d| png::ImageData::Indexed(pal, d))
-		}
+	match png {
+		png::Png::Argb32(data) => do_pad(data, x, y, w, h, png::Png::Argb32),
+		png::Png::Indexed(pal, data) => do_pad(data, x, y, w, h, |d| png::Png::Indexed(pal, d)),
 	}
 }
 
 fn crop(png: png::Png) -> (png::Png, (isize, isize)) {
-	match png.data {
-		png::ImageData::Argb32(data) => do_crop(data, png::ImageData::Argb32),
-		png::ImageData::Indexed(pal, data) => do_crop(data, |d| png::ImageData::Indexed(pal, d)),
+	match png {
+		png::Png::Argb32(data) => do_crop(data, png::Png::Argb32),
+		png::Png::Indexed(pal, data) => do_crop(data, |d| png::Png::Indexed(pal, d)),
 	}
 }
 
@@ -213,7 +211,7 @@ fn do_pad<T: Clone + Default>(
 	y: isize,
 	width: usize,
 	height: usize,
-	f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData,
+	f: impl FnOnce(Vec<Raster<T>>) -> png::Png,
 ) -> png::Png {
 	if data.len() == 1 {
 		let data = &mut data[0];
@@ -227,12 +225,12 @@ fn do_pad<T: Clone + Default>(
 		}
 		*data = dst;
 	};
-	make_png(data, f)
+	f(data)
 }
 
 fn do_crop<T: PartialEq>(
 	mut data: Vec<Raster<T>>,
-	f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData,
+	f: impl FnOnce(Vec<Raster<T>>) -> png::Png,
 ) -> (png::Png, (isize, isize)) {
 	let offset = if data.len() == 1 {
 		let data = &mut data[0];
@@ -240,11 +238,7 @@ fn do_crop<T: PartialEq>(
 	} else {
 		(0, 0)
 	};
-	(make_png(data, f), offset)
-}
-
-fn make_png<T>(data: Vec<Raster<T>>, f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData) -> png::Png {
-	png::Png { data: f(data) }
+	(f(data), offset)
 }
 
 #[cfg(test)]

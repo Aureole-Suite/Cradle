@@ -3,36 +3,31 @@ use std::io::{Read, Write};
 use cradle::raster::Raster;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Png {
-	pub data: ImageData,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImageData {
+pub enum Png {
 	Argb32(Vec<Raster<u32>>),
 	Indexed(Vec<u32>, Vec<Raster<u8>>),
 }
 
-impl ImageData {
+impl Png {
 	pub fn width(&self) -> usize {
 		match self {
-			ImageData::Argb32(d) => d[0].width(),
-			ImageData::Indexed(_, d) => d[0].width(),
+			Png::Argb32(d) => d[0].width(),
+			Png::Indexed(_, d) => d[0].width(),
 		}
 	}
 
 	pub fn height(&self) -> usize {
 		match self {
-			ImageData::Argb32(d) => d[0].height(),
-			ImageData::Indexed(_, d) => d[0].height(),
+			Png::Argb32(d) => d[0].height(),
+			Png::Indexed(_, d) => d[0].height(),
 		}
 	}
 }
 
 pub fn write(w: impl Write, img: &Png) -> eyre::Result<()> {
-	let mut png = png::Encoder::new(w, img.data.width() as u32, img.data.height() as u32);
-	match &img.data {
-		ImageData::Argb32(data) => {
+	let mut png = png::Encoder::new(w, img.width() as u32, img.height() as u32);
+	match img {
+		Png::Argb32(data) => {
 			png.set_color(png::ColorType::Rgba);
 			png.set_depth(png::BitDepth::Eight);
 			write_frames(data, png, |&argb| {
@@ -40,7 +35,7 @@ pub fn write(w: impl Write, img: &Png) -> eyre::Result<()> {
 				[r, g, b, a]
 			})
 		}
-		ImageData::Indexed(palette, data) => {
+		Png::Indexed(palette, data) => {
 			let mut pal = Vec::with_capacity(3 * palette.len());
 			let mut alp = Vec::with_capacity(palette.len());
 			for argb in palette {
@@ -102,23 +97,21 @@ pub fn read(f: impl Read) -> eyre::Result<Png> {
 		pal
 	});
 
-	let data = match png.info().color_type {
-		png::ColorType::Indexed => ImageData::Indexed(pal.unwrap(), read_frames(png, |[a]| a)?),
+	Ok(match png.info().color_type {
+		png::ColorType::Indexed => Png::Indexed(pal.unwrap(), read_frames(png, |[a]| a)?),
 		png::ColorType::Grayscale => {
-			ImageData::Argb32(read_frames(png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?)
+			Png::Argb32(read_frames(png, |[k]| u32::from_le_bytes([k, k, k, 0xFF]))?)
 		}
 		png::ColorType::GrayscaleAlpha => {
-			ImageData::Argb32(read_frames(png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?)
+			Png::Argb32(read_frames(png, |[k, a]| u32::from_le_bytes([k, k, k, a]))?)
 		}
-		png::ColorType::Rgb => ImageData::Argb32(read_frames(png, |[r, g, b]| {
+		png::ColorType::Rgb => Png::Argb32(read_frames(png, |[r, g, b]| {
 			u32::from_le_bytes([b, g, r, 0xFF])
 		})?),
-		png::ColorType::Rgba => ImageData::Argb32(read_frames(png, |[r, g, b, a]| {
+		png::ColorType::Rgba => Png::Argb32(read_frames(png, |[r, g, b, a]| {
 			u32::from_le_bytes([b, g, r, a])
 		})?),
-	};
-
-	Ok(Png { data })
+	})
 }
 
 fn read_frames<R: Read, T, const N: usize>(
