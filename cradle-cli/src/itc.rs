@@ -1,5 +1,8 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use cradle::itp::{ImageData, Palette};
+use cradle::{
+	itp::{ImageData, Palette},
+	raster::Raster,
+};
 use strict_result::Strict;
 
 use crate::{png, util::Output, Args};
@@ -47,8 +50,8 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 			let (w, h) = cradle::itp::read_size(itp)?;
 			let xo = frame.offset.0 * w as f32;
 			let yo = frame.offset.1 * h as f32;
-			let w = w + xo.abs().round() as u32 * 2;
-			let h = h + yo.abs().round() as u32 * 2;
+			let w = w + xo.abs().round() as usize * 2;
+			let h = h + yo.abs().round() as usize * 2;
 			maxw = maxw.max(w.next_power_of_two());
 			maxh = maxh.max(h.next_power_of_two());
 		}
@@ -106,11 +109,11 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 					if (xo - xo.round()).abs() < f32::EPSILON
 						&& (yo - yo.round()).abs() < f32::EPSILON
 					{
-						png = pad(png, -xo.round() as i32, -yo.round() as i32, maxw, maxh);
+						png = pad(png, -xo.round() as isize, -yo.round() as isize, maxw, maxh);
 						offset = None;
 					}
 				}
-				png::write(args, f, &png)?;
+				png::write(f, &png)?;
 				output
 			}
 		};
@@ -162,7 +165,7 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 			if spec.offset.is_none() && path.extension() == Some("png") && !args.itc_no_pad {
 				let data = std::fs::File::open(path)?;
 				let _span = tracing::info_span!("parse_png").entered();
-				let png = png::read(args, &data)?;
+				let png = png::read(&data)?;
 				let (png, offset) = crop(png);
 				let mut itp = crate::itp_png::png_to_itp(args, &png);
 				drop(_span);
@@ -188,62 +191,63 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 	Ok(itc)
 }
 
-fn pad(png: png::Png, x: i32, y: i32, width: u32, height: u32) -> png::Png {
-	let x = u32::checked_add_signed((width - png.width) / 2, x).unwrap();
-	let y = u32::checked_add_signed((height - png.height) / 2, y).unwrap();
-	let offset = (y * width + x) as usize;
-	let mut data = png.data;
-	match &mut data {
-		png::ImageData::Argb32(data) => {
-			let mut out = vec![data[0]; height as usize * width as usize];
-			copy_rect(data, &mut out[offset..], png.width as usize, width as usize);
-			*data = out;
+fn pad(png: png::Png, x: isize, y: isize, w: usize, h: usize) -> png::Png {
+	match png.data {
+		png::ImageData::Argb32(data) => do_pad(data, x, y, w, h, png::ImageData::Argb32),
+		png::ImageData::Indexed(pal, data) => {
+			do_pad(data, x, y, w, h, |d| png::ImageData::Indexed(pal, d))
 		}
-		png::ImageData::Indexed(_, data) => {
-			let mut out = vec![data[0]; height as usize * width as usize];
-			copy_rect(data, &mut out[offset..], png.width as usize, width as usize);
-			*data = out;
-		}
-	}
-	png::Png {
-		width,
-		height,
-		data,
 	}
 }
 
 fn crop(png: png::Png) -> (png::Png, (isize, isize)) {
-	let mut data = png.data;
-	let (offset, width, height) = match &mut data {
-		png::ImageData::Argb32(data) => {
-			let (cropped, offset, width) = do_crop(data, png.width as usize);
-			*data = cropped;
-			(offset, width, data.len() / width)
-		}
-		png::ImageData::Indexed(_, data) => {
-			let (cropped, offset, width) = do_crop(data, png.width as usize);
-			*data = cropped;
-			(offset, width, data.len() / width)
-		}
-	};
-	let png = png::Png {
-		width: width as u32,
-		height: height as u32,
-		data,
-	};
-	(png, offset)
+	match png.data {
+		png::ImageData::Argb32(data) => do_crop(data, png::ImageData::Argb32),
+		png::ImageData::Indexed(pal, data) => do_crop(data, |d| png::ImageData::Indexed(pal, d)),
+	}
 }
 
-fn do_crop<T: PartialEq>(data: &[T], width: usize) -> (Vec<T>, (isize, isize), usize) {
-	todo!()
+fn do_pad<T: Clone + Default>(
+	mut data: Vec<Raster<T>>,
+	x: isize,
+	y: isize,
+	width: usize,
+	height: usize,
+	f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData,
+) -> png::Png {
+	if data.len() == 1 {
+		let data = &mut data[0];
+		let x = usize::checked_add_signed((width - data.width()) / 2, x).unwrap();
+		let y = usize::checked_add_signed((height - data.height()) / 2, y).unwrap();
+		let mut dst = Raster::splat(width, height, data[[0, 0]].clone());
+		for x0 in 0..data.width() {
+			for y0 in 0..data.height() {
+				dst[[x + x0, y + y0]] = data[[x, y]].clone()
+			}
+		}
+		*data = dst;
+	};
+	make_png(data, f)
 }
 
-fn copy_rect<T: Clone>(src: &[T], dst: &mut [T], src_width: usize, dst_width: usize) {
-	use std::iter::zip;
-	for (src, dst) in zip(src.chunks_exact(src_width), dst.chunks_exact_mut(dst_width)) {
-		for (src, dst) in zip(src.iter(), dst.iter_mut()) {
-			*dst = src.clone()
-		}
+fn do_crop<T: PartialEq>(
+	mut data: Vec<Raster<T>>,
+	f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData,
+) -> (png::Png, (isize, isize)) {
+	let offset = if data.len() == 1 {
+		let data = &mut data[0];
+		todo!();
+	} else {
+		(0, 0)
+	};
+	(make_png(data, f), offset)
+}
+
+fn make_png<T>(data: Vec<Raster<T>>, f: impl FnOnce(Vec<Raster<T>>) -> png::ImageData) -> png::Png {
+	png::Png {
+		width: data[0].width(),
+		height: data[0].height(),
+		data: f(data),
 	}
 }
 

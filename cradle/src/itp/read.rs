@@ -146,7 +146,7 @@ pub fn read(f: &mut Reader) -> Result<Itp, Error> {
 	})
 }
 
-pub fn read_size(f: &mut Reader) -> Result<(u32, u32), Error> {
+pub fn read_size(f: &mut Reader) -> Result<(usize, usize), Error> {
 	let head = f.u32()?;
 	let flags = match head {
 		PNG | DDS => bail!(NotItpSnafu),
@@ -155,7 +155,7 @@ pub fn read_size(f: &mut Reader) -> Result<(u32, u32), Error> {
 			let _size = f.u32()? as usize;
 			if fourcc == *b"IHDR" {
 				f.check_u32(32)?;
-				return Ok((f.u32()?, f.u32()?));
+				return Ok((f.u32()? as usize, f.u32()? as usize));
 			}
 		},
 		#[rustfmt::skip]
@@ -176,9 +176,9 @@ pub fn read_size(f: &mut Reader) -> Result<(u32, u32), Error> {
 		f.u32()?;
 		f.check(b"CCPI")?;
 		f.slice(6)?;
-		Ok((f.u16()? as u32, f.u16()? as u32))
+		Ok((f.u16()? as usize, f.u16()? as usize))
 	} else {
-		Ok((f.u32()?, f.u32()?))
+		Ok((f.u32()? as usize, f.u32()? as usize))
 	}
 }
 
