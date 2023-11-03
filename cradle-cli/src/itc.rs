@@ -109,8 +109,8 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 					if (xo - xo.round()).abs() < 0.0001 && (yo - yo.round()).abs() < 0.0001 {
 						pad(
 							&mut png,
-							-xo.round() as isize,
-							-yo.round() as isize,
+							xo.round() as isize,
+							yo.round() as isize,
 							maxw,
 							maxh,
 						);
@@ -176,7 +176,7 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 				let mut itp = crate::itp_png::png_to_itp(args, &png);
 				drop(_span);
 				crate::guess_itp_revision(args, &mut itp);
-				let offset = (-offset.0 as f32, -offset.1 as f32);
+				let offset = (offset.0 as f32, offset.1 as f32);
 				(cradle::itp::write(&itp)?, offset)
 			} else {
 				let offset = spec.offset.unwrap_or_default();
@@ -242,8 +242,8 @@ fn do_pad<T: PartialEq + Clone>(
 	w: usize,
 	h: usize,
 ) -> Raster<T> {
-	let ox = ((w - data.width()) as isize / 2 + cx) as usize;
-	let oy = ((h - data.height()) as isize / 2 + cy) as usize;
+	let ox = ((w - data.width()) as isize / 2 - cx) as usize;
+	let oy = ((h - data.height()) as isize / 2 - cy) as usize;
 	let mut dst = Raster::splat(w, h, data[[0, 0]].clone());
 	for x in 0..data.width() {
 		for y in 0..data.height() {
@@ -263,12 +263,12 @@ fn do_crop<T: PartialEq + Clone>(data: &Raster<T>) -> (Raster<T>, (isize, isize)
 	let oh = (d - u + 6).next_power_of_two();
 
 	#[rustfmt::skip]
-	let cx = if ow == w { 0 } else { (r+l) as isize / 2 - w as isize / 2 };
+	let cx = if ow == w { 0 } else { w as isize / 2 - (r+l) as isize / 2 };
 	#[rustfmt::skip]
-	let cy = if oh == h { 0 } else { (d+u) as isize / 2 - h as isize / 2 };
+	let cy = if oh == h { 0 } else { h as isize / 2 - (d+u) as isize / 2 };
 
-	let ox = (w as isize / 2 + cx) as usize - ow / 2;
-	let oy = (h as isize / 2 + cy) as usize - oh / 2;
+	let ox = (w as isize / 2 - cx) as usize - ow / 2;
+	let oy = (h as isize / 2 - cy) as usize - oh / 2;
 
 	let mut dst = Raster::splat(ow, oh, data[[0, 0]].clone());
 	for x in 0..ow {
