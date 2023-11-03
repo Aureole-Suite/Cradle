@@ -106,9 +106,7 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 				let mut png = crate::itp_png::itp_to_png(args, &itp)?;
 				if !args.itc_no_pad {
 					let _span = tracing::info_span!("pad").entered();
-					if (xo - xo.round()).abs() < 0.1 / w as f32
-						&& (yo - yo.round()).abs() < 0.1 / h as f32
-					{
+					if (xo - xo.round()).abs() < 0.0001 && (yo - yo.round()).abs() < 0.0001 {
 						pad(
 							&mut png,
 							-xo.round() as isize,
@@ -157,7 +155,9 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 		palette: spec.palette,
 		..Default::default()
 	};
-	for (order, spec) in spec.frames.iter().enumerate() {
+	let mut frames = spec.frames.iter().enumerate().collect::<Vec<_>>();
+	frames.sort_by_key(|a| a.1.frame);
+	for (order, spec) in frames {
 		let _span = tracing::info_span!("frame", i = spec.frame).entered();
 		let Some(frame) = itc.frames.get_mut(spec.frame) else {
 			eyre::bail!("invalid frame number");
@@ -176,7 +176,7 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 				let mut itp = crate::itp_png::png_to_itp(args, &png);
 				drop(_span);
 				crate::guess_itp_revision(args, &mut itp);
-				let offset = (offset.0 as f32, offset.1 as f32);
+				let offset = (-offset.0 as f32, -offset.1 as f32);
 				(cradle::itp::write(&itp)?, offset)
 			} else {
 				let offset = spec.offset.unwrap_or_default();
@@ -199,46 +199,99 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 
 fn pad(png: &mut png::Png, x: isize, y: isize, w: usize, h: usize) {
 	match png {
-		png::Png::Argb32(data) => do_pad(data, x, y, w, h),
-		png::Png::Indexed(_, data) => do_pad(data, x, y, w, h),
+		png::Png::Argb32(data) => {
+			if let [data] = data.as_mut_slice() {
+				*data = do_pad(data, x, y, w, h);
+			}
+		}
+		png::Png::Indexed(_, data) => {
+			if let [data] = data.as_mut_slice() {
+				*data = do_pad(data, x, y, w, h);
+			}
+		}
 	}
 }
 
 fn crop(png: &mut png::Png) -> (isize, isize) {
 	match png {
-		png::Png::Argb32(data) => do_crop(data),
-		png::Png::Indexed(_, data) => do_crop(data),
-	}
-}
-
-fn do_pad<T: Clone + Default>(
-	data: &mut [Raster<T>],
-	x: isize,
-	y: isize,
-	width: usize,
-	height: usize,
-) {
-	if data.len() == 1 {
-		let data = &mut data[0];
-		let x = usize::checked_add_signed((width - data.width()) / 2, x).unwrap();
-		let y = usize::checked_add_signed((height - data.height()) / 2, y).unwrap();
-		let mut dst = Raster::splat(width, height, data[[0, 0]].clone());
-		for x0 in 0..data.width() {
-			for y0 in 0..data.height() {
-				dst[[x + x0, y + y0]] = data[[x0, y0]].clone()
+		png::Png::Argb32(data) => {
+			if let [data] = data.as_mut_slice() {
+				let (out, offset) = do_crop(data);
+				*data = out;
+				offset
+			} else {
+				(0, 0)
 			}
 		}
-		*data = dst;
-	};
+		png::Png::Indexed(_, data) => {
+			if let [data] = data.as_mut_slice() {
+				let (out, offset) = do_crop(data);
+				*data = out;
+				offset
+			} else {
+				(0, 0)
+			}
+		}
+	}
 }
 
-fn do_crop<T: PartialEq>(data: &mut [Raster<T>]) -> (isize, isize) {
-	if data.len() == 1 {
-		let data = &mut data[0];
-		todo!();
-	} else {
-		(0, 0)
+fn do_pad<T: PartialEq + Clone>(
+	data: &Raster<T>,
+	cx: isize,
+	cy: isize,
+	w: usize,
+	h: usize,
+) -> Raster<T> {
+	let ox = ((w - data.width()) as isize / 2 + cx) as usize;
+	let oy = ((h - data.height()) as isize / 2 + cy) as usize;
+	let mut dst = Raster::splat(w, h, data[[0, 0]].clone());
+	for x in 0..data.width() {
+		for y in 0..data.height() {
+			dst[[ox + x, oy + y]] = data[[x, y]].clone()
+		}
 	}
+	dst
+}
+
+fn do_crop<T: PartialEq + Clone>(data: &Raster<T>) -> (Raster<T>, (isize, isize)) {
+	let w = data.width();
+	let h = data.height();
+
+	let (l, r, u, d) = bounds(data);
+
+	let ow = (r - l + 6).next_power_of_two();
+	let oh = (d - u + 6).next_power_of_two();
+
+	#[rustfmt::skip]
+	let cx = if ow == w { 0 } else { (r+l) as isize / 2 - w as isize / 2 };
+	#[rustfmt::skip]
+	let cy = if oh == h { 0 } else { (d+u) as isize / 2 - h as isize / 2 };
+
+	let ox = (w as isize / 2 + cx) as usize - ow / 2;
+	let oy = (h as isize / 2 + cy) as usize - oh / 2;
+
+	let mut dst = Raster::splat(ow, oh, data[[0, 0]].clone());
+	for x in 0..ow {
+		for y in 0..oh {
+			dst[[x, y]] = data[[ox + x, oy + y]].clone()
+		}
+	}
+	(dst, (cx, cy))
+}
+
+fn bounds<T: PartialEq>(data: &Raster<T>) -> (usize, usize, usize, usize) {
+	let w = data.width();
+	let h = data.height();
+
+	let l = (0..w).find(|&x| (0..h).any(|y| data[[x, y]] != data[[0, 0]]));
+	let r = (0..w).rfind(|&x| (0..h).any(|y| data[[x, y]] != data[[0, 0]]));
+	let u = (0..h).find(|&y| (0..w).any(|x| data[[x, y]] != data[[0, 0]]));
+	let d = (0..h).rfind(|&y| (0..w).any(|x| data[[x, y]] != data[[0, 0]]));
+
+	let (Some(l), Some(r), Some(u), Some(d)) = (l, r, u, d) else {
+		panic!("not sure what to do with empty images")
+	};
+	(l, r, u, d)
 }
 
 #[cfg(test)]
@@ -260,5 +313,37 @@ fn test_itp_roundtrips(path: &Utf8Path, bytes: &[u8]) -> Result<(), eyre::Error>
 	assert_eq!(itc, itc2);
 	let bytes2 = cradle::itc::write(&itc2)?;
 	assert_eq!(bytes, bytes2);
+	Ok(())
+}
+
+// Crop/pad currently do not roundtrip
+#[cfg(feature = "ignored")]
+#[cfg(test)]
+#[filetest::filetest("../../samples/itc/*.itc")]
+fn test_crop_pad(path: &Utf8Path, bytes: &[u8]) -> Result<(), eyre::Error> {
+	let tmpdir = camino_tempfile::Builder::new()
+		.prefix("cradle-")
+		.suffix(&format!("-{}", path.file_stem().unwrap()))
+		.tempdir()?;
+	let args = &Args::default();
+
+	let mut itc = cradle::itc::read(bytes)?;
+	extract(args, &itc, Output::At(tmpdir.path().to_path_buf()))?;
+	let file = std::fs::File::open(tmpdir.path().join("cradle.itc.json"))?;
+	let mut itc2 = create(args, serde_json::from_reader(file)?, tmpdir.path())?;
+	for (f1, f2) in itc.frames.iter_mut().zip(itc2.frames.iter_mut()) {
+		if let (Some(itp1), Some(itp2)) = (f1.itp.take(), f2.itp.take()) {
+			let mut itp1 = cradle::itp::read(&itp1)?;
+			let mut itp2 = cradle::itp::read(&itp2)?;
+			if let ImageData::Indexed(pal @ Palette::External(_), _) = &mut itp1.data {
+				*pal = Palette::Embedded(itc.palette.clone().unwrap());
+			}
+			if let ImageData::Indexed(pal @ Palette::External(_), _) = &mut itp2.data {
+				*pal = Palette::Embedded(itc.palette.clone().unwrap());
+			}
+			assert_eq!(itp1.data, itp2.data)
+		}
+	}
+	assert_eq!(itc.frames, itc2.frames);
 	Ok(())
 }
