@@ -1,3 +1,5 @@
+use std::io::{self, Write};
+
 use camino::{Utf8Path, Utf8PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,5 +48,108 @@ impl Output {
 			.file_name()
 			.ok_or_else(|| eyre::eyre!("file has no name"))?;
 		Ok(Output::In(dir.join(name)))
+	}
+}
+
+pub struct MyFormatter {
+	level: usize,
+	indent_to: usize,
+	has_value: bool,
+}
+
+impl MyFormatter {
+	pub fn new(depth: usize) -> Self {
+		Self {
+			level: 0,
+			indent_to: depth,
+			has_value: false,
+		}
+	}
+
+	fn indent<W: Write + ?Sized>(&self, wr: &mut W, max_level: usize) -> io::Result<()> {
+		if self.level <= max_level {
+			wr.write_all(b"\n")?;
+			for _ in 0..self.level {
+				wr.write_all(b"\t")?;
+			}
+		} else {
+			wr.write_all(b" ")?;
+		}
+		Ok(())
+	}
+
+	fn write_begin<W: Write + ?Sized>(&mut self, w: &mut W, delim: &[u8]) -> io::Result<()> {
+		self.level += 1;
+		self.has_value = false;
+		w.write_all(delim)
+	}
+
+	fn write_end<W: Write + ?Sized>(&mut self, w: &mut W, delim: &[u8]) -> io::Result<()> {
+		self.level -= 1;
+		if self.has_value {
+			self.indent(w, self.indent_to - 1)?;
+		}
+		w.write_all(delim)?;
+		if self.level == 0 {
+			w.write_all(b"\n")?;
+		}
+		Ok(())
+	}
+
+	fn write_comma<W: Write + ?Sized>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+		if !first {
+			w.write_all(b",")?;
+		}
+		self.indent(w, self.indent_to)?;
+		Ok(())
+	}
+}
+
+impl serde_json::ser::Formatter for MyFormatter {
+	#[inline]
+	fn begin_array<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_begin(w, b"[")
+	}
+
+	#[inline]
+	fn end_array<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_end(w, b"]")
+	}
+
+	#[inline]
+	fn begin_array_value<W: Write + ?Sized>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+		self.write_comma(w, first)
+	}
+
+	#[inline]
+	fn end_array_value<W: Write + ?Sized>(&mut self, _w: &mut W) -> io::Result<()> {
+		self.has_value = true;
+		Ok(())
+	}
+
+	#[inline]
+	fn begin_object<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_begin(w, b"{")
+	}
+
+	#[inline]
+	fn end_object<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		self.write_end(w, b"}")
+	}
+
+	#[inline]
+	fn begin_object_key<W: Write + ?Sized>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+		self.write_comma(w, first)
+	}
+
+	#[inline]
+	fn begin_object_value<W: Write + ?Sized>(&mut self, w: &mut W) -> io::Result<()> {
+		w.write_all(b": ")
+	}
+
+	#[inline]
+	fn end_object_value<W: Write + ?Sized>(&mut self, _w: &mut W) -> io::Result<()> {
+		self.has_value = true;
+		Ok(())
 	}
 }

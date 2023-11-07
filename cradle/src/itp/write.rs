@@ -58,8 +58,6 @@ macro_rules! bail {
 pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 	let Itp {
 		ref status,
-		width,
-		height,
 		ref data,
 	} = *itp;
 
@@ -77,8 +75,8 @@ pub fn write(itp: &Itp) -> Result<Vec<u8>, Error> {
 	if status.base_format == BFT::Indexed3 {
 		f.slice(&write_ccpi(itp)?);
 	} else {
-		f.u32(width as u32);
-		f.u32(height as u32);
+		f.u32(data.width() as u32);
+		f.u32(data.height() as u32);
 
 		if let ImageData::Indexed(pal, _) = data {
 			let fixed_size = matches!(head, 1000 | 1002);
@@ -106,8 +104,6 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 
 	let Itp {
 		ref status,
-		width,
-		height,
 		ref data,
 	} = *itp;
 
@@ -121,8 +117,8 @@ fn write_revision_3(itp: &Itp) -> Result<Vec<u8>, Error> {
 	chunk(&mut f, b"IHDR", {
 		let mut f = Writer::new();
 		f.u32(32);
-		f.u32(width as u32);
-		f.u32(height as u32);
+		f.u32(data.width() as u32);
+		f.u32(data.height() as u32);
 		f.diff32(start, end);
 		f.u16(status.itp_revision as u16);
 		f.u16(status.base_format as u16);
@@ -388,8 +384,8 @@ fn write_ccpi(itp: &Itp) -> Result<Vec<u8>, Error> {
 	f.u16(pal_size as u16);
 	f.u8(cw.ilog2() as u8);
 	f.u8(ch.ilog2() as u8);
-	f.u16(itp.width as u16);
-	f.u16(itp.height as u16);
+	f.u16(itp.data.width() as u16);
+	f.u16(itp.data.height() as u16);
 	f.u16(flags);
 	f.slice(&maybe_compress(itp.status.compression, &g.finish()?));
 	Ok(f.finish()?)

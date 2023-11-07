@@ -6,6 +6,7 @@ use clap::ValueHint;
 use eyre_span::emit;
 use strict_result::*;
 
+mod itc;
 mod itp_dds;
 mod itp_png;
 mod png;
@@ -32,6 +33,17 @@ struct Args {
 	#[clap(long)]
 	dds: bool,
 
+	/// When extracting itc, do not convert the individual images
+	#[clap(long)]
+	itp: bool,
+
+	/// When extracting itc, do not create a subdirectory
+	///
+	/// Normally the converted files will be placed at ch00000/index.json and ch00000/0.png,
+	/// with this flag they are instead placed at ch00000.json and ch00000.0.png.
+	#[clap(long)]
+	no_dir: bool,
+
 	/// Do not read or write indexed images from png files
 	#[clap(long)]
 	png_no_palette: bool,
@@ -52,11 +64,39 @@ struct Args {
 	/// - revision 3 for BC7-encoded images.
 	#[clap(long, value_parser = 1..=3, verbatim_doc_comment)]
 	itp_revision: Option<u16>,
+
+	/// Do not pad/crop the frames to equal size
+	///
+	/// Only supported in png; --itp and --dds invalidate this.
+	#[clap(long)]
+	itc_no_pad: bool,
 }
 
 impl Cli {
 	fn output<'a>(&'a self, path: &'a Utf8Path) -> eyre::Result<util::Output> {
 		util::Output::from_output_flag(self.output.as_deref(), path, self.file.len())
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, derive_more::From)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Spec {
+	Itc(itc::ItcSpec),
+}
+
+impl Spec {
+	fn write(
+		path: impl AsRef<Utf8Path>,
+		formatter: impl serde_json::ser::Formatter,
+		data: impl Into<Spec>,
+	) -> eyre::Result<()> {
+		use serde::Serialize;
+		let mut ser = serde_json::Serializer::with_formatter(
+			std::fs::File::create(path.as_ref())?,
+			formatter,
+		);
+		data.into().serialize(&mut ser)?;
+		Ok(())
 	}
 }
 
@@ -86,21 +126,60 @@ fn init_tracing() -> Result<(), eyre::Error> {
 	Ok(())
 }
 
-#[tracing::instrument(skip_all, fields(path=%file))]
-fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
+#[tracing::instrument(skip_all, fields(path=%raw_file))]
+fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
+	let file = &effective_input_file(raw_file)?;
+	if file != raw_file {
+		tracing::info!("using {file}");
+	}
 	let ext = file.extension().unwrap_or("");
 	let output = cli.output(file)?;
 	let args = &cli.args;
 	match ext {
 		"itp" => {
 			let data = std::fs::read(file)?;
-			let output = from_itp(args, &data, output)?;
+			let itp = tracing::info_span!("parse_itp")
+				.in_scope(|| Ok(cradle::itp::read(&data)?))
+				.strict()?;
+			let output = from_itp(args, &itp, output)?;
 			tracing::info!("wrote to {output}");
 		}
+
 		"dds" | "png" => {
 			let data = to_itp(args, file)?;
 			let output = output.with_extension("itp");
 			std::fs::write(&output, data)?;
+			tracing::info!("wrote to {output}");
+		}
+
+		"itc" => {
+			let data = std::fs::read(file)?;
+			let itc = tracing::info_span!("parse_itc")
+				.in_scope(|| Ok(cradle::itc::read(&data)?))
+				.strict()?;
+			let output = crate::itc::extract(args, &itc, output)?;
+			tracing::info!("wrote to {output}");
+		}
+
+		"json" => {
+			let output = if file == raw_file {
+				// to strip off the duplicate .ext.json suffix
+				cli.output(&raw_file.with_extension(""))?
+			} else {
+				// but if it's a dir, there's no such suffix
+				cli.output(raw_file)?
+			};
+			let spec = tracing::info_span!("parse_json")
+				.in_scope(|| Ok(serde_json::from_reader(std::fs::File::open(file)?)?))
+				.strict()?;
+			let output = match spec {
+				Spec::Itc(spec) => {
+					let itc = itc::create(args, spec, file.parent().unwrap())?;
+					let output = output.with_extension("itc");
+					std::fs::write(&output, cradle::itc::write(&itc)?)?;
+					output
+				}
+			};
 			tracing::info!("wrote to {output}");
 		}
 
@@ -109,19 +188,41 @@ fn process(cli: &Cli, file: &Utf8Path) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn from_itp(args: &Args, itp_bytes: &[u8], output: util::Output) -> eyre::Result<Utf8PathBuf> {
-	let itp = tracing::info_span!("parse_itp")
-		.in_scope(|| Ok(cradle::itp::read(itp_bytes)?))
-		.strict()?;
+fn effective_input_file(file: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
+	if file.is_dir() {
+		let files = file.read_dir_utf8()?.collect::<Result<Vec<_>, _>>()?;
+		let files = files
+			.iter()
+			.map(|f| f.path())
+			.filter(|f| f.is_file())
+			.filter(|f| f.extension() == Some("json"))
+			.collect::<Vec<_>>();
+		match files.as_slice() {
+			[] => eyre::bail!("no json file in directory"),
+			[a] => Ok(a.to_path_buf()),
+			_ => eyre::bail!("multiple json files in directory"),
+		}
+	} else if file.exists() {
+		Ok(file.to_path_buf())
+	} else {
+		eyre::bail!("file doesn't exist")
+	}
+}
+
+fn from_itp(
+	args: &Args,
+	itp: &cradle::itp::Itp,
+	output: util::Output,
+) -> eyre::Result<Utf8PathBuf> {
 	if args.dds {
 		let output = output.with_extension("dds");
 		let f = std::fs::File::create(&output)?;
-		itp_dds::itp_to_dds(args, f, &itp)?;
+		itp_dds::itp_to_dds(args, f, itp)?;
 		Ok(output)
 	} else {
 		let output = output.with_extension("png");
 		let f = std::fs::File::create(&output)?;
-		let png = itp_png::itp_to_png(args, &itp)?;
+		let png = itp_png::itp_to_png(args, itp)?;
 		png::write(f, &png)?;
 		Ok(output)
 	}

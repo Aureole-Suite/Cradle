@@ -24,6 +24,15 @@ impl<T> Raster<T> {
 		Self::new_with(width, height, data)
 	}
 
+	pub fn splat(width: usize, height: usize, val: T) -> Self
+	where
+		T: Clone,
+	{
+		let mut data = Vec::with_capacity(width * height);
+		data.resize(width * height, val);
+		Self::new_with(width, height, data)
+	}
+
 	pub fn new_with(width: usize, height: usize, data: Vec<T>) -> Self {
 		assert_eq!(data.len(), width * height);
 		Raster {

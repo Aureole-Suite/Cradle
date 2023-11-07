@@ -10,6 +10,12 @@ fn main() -> anyhow::Result<()> {
 		Err(cradle::itp::ReadError::NotItp) => Ok(()),
 		Err(e) => Err(e.into()),
 	})?;
+	run_everything(".itc", |dat| {
+		let itc = cradle::itc::read(dat)?;
+		let dat2 = cradle::itc::write(&itc)?;
+		assert!(dat == dat2 || dat[..dat.len() - 1] == dat2 || dat[..dat.len() - 2] == dat2); // Damn geofront
+		Ok(())
+	})?;
 	Ok(())
 }
 
