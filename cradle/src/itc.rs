@@ -1,69 +1,64 @@
+use std::backtrace::Backtrace;
+
 use gospel::read::{Le as _, Reader};
 use gospel::write::{Le as _, Writer};
-use snafu::prelude::*;
 
-#[derive(Debug, Snafu)]
+use crate::util::bail;
+
+#[derive(Debug, thiserror::Error)]
 pub enum ReadError {
-	#[snafu(display("this is not an itc file"))]
+	#[error("this is not an itc file")]
 	NotItc,
-
-	#[allow(private_interfaces)]
-	#[snafu(context(false))]
-	Invalid {
-		source: InnerReadError,
-		backtrace: std::backtrace::Backtrace,
+	#[error("{source}")]
+	Gospel {
+		#[from]
+		source: gospel::read::Error,
+		backtrace: Backtrace,
+	},
+	#[error("{source}")]
+	Compress {
+		#[from]
+		source: falcompress::Error,
+		backtrace: Backtrace,
+	},
+	#[error("{message}")]
+	Whatever {
+		message: String,
+		backtrace: Backtrace,
 	},
 }
 
-#[derive(Debug, Snafu)]
-#[snafu(module(er), context(suffix(false)))]
-enum InnerReadError {
-	#[snafu(context(false))]
-	Read { source: gospel::read::Error },
-
-	#[snafu(context(false))]
-	Compress { source: falcompress::Error },
-}
-
-impl From<gospel::read::Error> for ReadError {
-	fn from(source: gospel::read::Error) -> Self {
-		InnerReadError::from(source).into()
+impl From<std::fmt::Arguments<'_>> for ReadError {
+	fn from(message: std::fmt::Arguments<'_>) -> Self {
+		Self::Whatever {
+			message: message.to_string(),
+			backtrace: Backtrace::capture(),
+		}
 	}
 }
 
-impl From<falcompress::Error> for ReadError {
-	fn from(source: falcompress::Error) -> Self {
-		InnerReadError::from(source).into()
-	}
-}
-
-#[derive(Debug, Snafu)]
+#[derive(Debug, thiserror::Error)]
 pub enum WriteError {
-	#[allow(private_interfaces)]
-	#[snafu(context(false))]
-	Invalid {
-		source: InnerWriteError,
-		backtrace: std::backtrace::Backtrace,
+	#[error("{source}")]
+	Gospel {
+		#[from]
+		source: gospel::write::Error,
+		backtrace: Backtrace,
+	},
+	#[error("{message}")]
+	Whatever {
+		message: String,
+		backtrace: Backtrace,
 	},
 }
 
-#[derive(Debug, Snafu)]
-#[snafu(module(ew), context(suffix(false)))]
-enum InnerWriteError {
-	#[snafu(context(false))]
-	Write { source: gospel::write::Error },
-}
-
-impl From<gospel::write::Error> for WriteError {
-	fn from(source: gospel::write::Error) -> Self {
-		InnerWriteError::from(source).into()
+impl From<std::fmt::Arguments<'_>> for WriteError {
+	fn from(message: std::fmt::Arguments<'_>) -> Self {
+		Self::Whatever {
+			message: message.to_string(),
+			backtrace: Backtrace::capture(),
+		}
 	}
-}
-
-macro_rules! bail {
-	($e:expr) => {
-		$e.fail::<!>()?
-	};
 }
 
 #[derive(Clone, PartialEq)]
@@ -131,7 +126,7 @@ pub fn read(data: &[u8]) -> Result<Itc, ReadError> {
 	let has_palette = match &f.array()? {
 		b"V101" => false,
 		b"V102" => true,
-		_ => bail!(NotItcSnafu),
+		_ => bail!(ReadError::NotItc),
 	};
 
 	let mut frames = std::array::from_fn(|_| Frame::default());

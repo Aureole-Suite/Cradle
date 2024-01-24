@@ -214,7 +214,7 @@ dependencies = [
  "memmap2",
  "num_enum",
  "rayon",
- "snafu",
+ "strict_result",
  "thiserror",
 ]
 
@@ -245,9 +245,6 @@ dependencies = [
 [[package]]
 name = "cradle-dds"
 version = "0.1.0"
-dependencies = [
- "thiserror",
-]
 
 [[package]]
 name = "cradle-dxt"
@@ -307,12 +304,6 @@ dependencies = [
  "rustc_version",
  "syn 1.0.109",
 ]
-
-[[package]]
-name = "doc-comment"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "either"
@@ -377,6 +368,7 @@ dependencies = [
 [[package]]
 name = "falcompress"
 version = "0.1.0"
+source = "git+https://github.com/Aureole-Suite/Falcompress.git#61213cc799f98e75662d8aaac5cb8e00b6df4509"
 dependencies = [
  "bitmatch",
  "gospel",
@@ -875,28 +867,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 
 [[package]]
-name = "snafu"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4de37ad025c587a29e8f3f5605c00f70b98715ef90b9061a815b9e59e9042d6"
-dependencies = [
- "doc-comment",
- "snafu-derive",
-]
-
-[[package]]
-name = "snafu-derive"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "990079665f075b699031e9c08fd3ab99be5029b96f3b78dc0709e8f77e4efebf"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -904,9 +874,9 @@ checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
 name = "strict_result"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "721c36b5e593790ae6b96747b657482f8d90eee883cf83f15d0ada5c7eea7d78"
+checksum = "013dfae9681743a1e567e0b2b44c565744ef4b3f72311802ea4b4bc7f42c5bba"
 
 [[package]]
 name = "strsim"

@@ -8,8 +8,8 @@ thiserror = "1.0.0"
 num_enum = "0.7.0"
 extend = "1.2.0"
 gospel = "0.1.1"
-snafu = { version = "0.7.5", features = ["backtraces-impl-std"] }
-falcompress.path = "../../Falcompress"
+falcompress.git = "https://github.com/Aureole-Suite/Falcompress.git"
+strict_result = "1.2.0"
 
 [dev-dependencies]
 filetest = "0.1.1"
