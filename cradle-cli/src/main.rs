@@ -1,11 +1,12 @@
 #![feature(array_chunks)]
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::Parser;
-use clap::ValueHint;
+use clap::{builder::TypedValueParser, Parser, ValueHint};
+use eyre::ContextCompat as _;
 use eyre_span::emit;
 use strict_result::*;
 
+mod ch;
 mod itc;
 mod itp_dds;
 mod itp_png;
@@ -70,6 +71,25 @@ struct Args {
 	/// Only supported in png; --itp and --dds invalidate this.
 	#[clap(long)]
 	itc_no_pad: bool,
+
+	/// Override the width for parsing ._ch files, instead of guessing from name.
+	///
+	/// When writing, the width of the source is used regardless of this.
+	#[clap(long)]
+	ch_width: Option<usize>,
+
+	/// Override the format for parsing and writing ._ch files, instead of guessing from name.
+	#[clap(
+		long,
+		value_parser = clap::builder::PossibleValuesParser::new(["1555", "4444", "8888"])
+			.map(|v| match v.as_str() {
+				"1555" => cradle::ch::Mode::Argb1555,
+				"4444" => cradle::ch::Mode::Argb4444,
+				"8888" => cradle::ch::Mode::Argb8888,
+				_ => unreachable!(),
+			}),
+	)]
+	ch_mode: Option<cradle::ch::Mode>,
 }
 
 impl Cli {
@@ -141,7 +161,66 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 			let itp = tracing::info_span!("parse_itp")
 				.in_scope(|| Ok(cradle::itp::read(&data)?))
 				.strict()?;
-			let output = from_itp(args, &itp, output)?;
+			let output = if args.dds {
+				let output = output.with_extension("dds");
+				let f = std::fs::File::create(&output)?;
+				itp_dds::itp_to_dds(args, f, &itp)?;
+				output
+			} else {
+				let output = output.with_extension("png");
+				let f = std::fs::File::create(&output)?;
+				let png = itp_png::itp_to_png(args, &itp)?;
+				png::write(f, &png)?;
+				output
+			};
+			tracing::info!("wrote to {output}");
+		}
+
+		"_ch" => {
+			let data = std::fs::read(file)?;
+			let name = file.file_name().unwrap();
+			let guess = cradle::ch::guess_from_byte_size(name, data.len());
+			let mode = args
+				.ch_mode
+				.or(guess.map(|a| a.0))
+				.context("could not guess format")?;
+			let width = args
+				.ch_width
+				.or(guess.map(|a| a.1))
+				.context("could not guess format")?;
+
+			let ch = tracing::info_span!("parse_ch")
+				.in_scope(|| Ok(cradle::ch::read(mode, width, &data)?))
+				.strict()?;
+			if args.dds {
+				let output = output.with_extension("ch.dds");
+				let f = std::fs::File::create(&output)?;
+				ch::ch_to_dds(args, f, &ch)?;
+				tracing::info!("wrote to {output}");
+			} else {
+				let output = output.with_extension("ch.png");
+				let f = std::fs::File::create(&output)?;
+				let png = ch::ch_to_png(args, &ch)?;
+				png::write(f, &png)?;
+				tracing::info!("wrote to {output}");
+			};
+		}
+
+		"png" | "dds" if file.with_extension("").extension() == Some("ch") => {
+			let output = output.with_extension("").with_extension("_ch");
+			let data = std::fs::File::open(file)?;
+			let itp = if ext == "png" {
+				tracing::info_span!("parse_png")
+					.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(&data).strict()?)))?
+			} else {
+				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?
+			};
+			let name = file.file_name().unwrap();
+			let guess =
+				cradle::ch::guess_from_image_size(name, itp.data.width(), itp.data.height());
+			let mode = args.ch_mode.or(guess).context("could not guess format")?;
+			let ch = crate::ch::itp_to_ch(args, mode, &itp)?;
+			std::fs::write(&output, cradle::ch::write(&ch)?)?;
 			tracing::info!("wrote to {output}");
 		}
 
@@ -209,32 +288,12 @@ fn effective_input_file(file: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
 	}
 }
 
-fn from_itp(
-	args: &Args,
-	itp: &cradle::itp::Itp,
-	output: util::Output,
-) -> eyre::Result<Utf8PathBuf> {
-	if args.dds {
-		let output = output.with_extension("dds");
-		let f = std::fs::File::create(&output)?;
-		itp_dds::itp_to_dds(args, f, itp)?;
-		Ok(output)
-	} else {
-		let output = output.with_extension("png");
-		let f = std::fs::File::create(&output)?;
-		let png = itp_png::itp_to_png(args, itp)?;
-		png::write(f, &png)?;
-		Ok(output)
-	}
-}
-
 fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
 	let data = match path.extension() {
 		Some("png") => {
 			let data = std::fs::File::open(path)?;
 			let mut itp = tracing::info_span!("parse_png")
-				.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(&data)?)))
-				.strict()?;
+				.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(&data).strict()?)))?;
 			guess_itp_revision(args, &mut itp);
 			cradle::itp::write(&itp)?
 		}
