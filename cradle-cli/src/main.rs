@@ -192,13 +192,20 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 			let ch = tracing::info_span!("parse_ch")
 				.in_scope(|| Ok(cradle::ch::read(mode, width, &data)?))
 				.strict()?;
+
+			let ext = match mode {
+				cradle::ch::Mode::Argb1555 => "1555",
+				cradle::ch::Mode::Argb4444 => "4444",
+				cradle::ch::Mode::Argb8888 => "8888",
+			};
+
 			if args.dds {
-				let output = output.with_extension("ch.dds");
+				let output = output.with_extension(&format!("{ext}.dds"));
 				let f = std::fs::File::create(&output)?;
 				ch::ch_to_dds(args, f, &ch)?;
 				tracing::info!("wrote to {output}");
 			} else {
-				let output = output.with_extension("ch.png");
+				let output = output.with_extension(&format!("{ext}.png"));
 				let f = std::fs::File::create(&output)?;
 				let png = ch::ch_to_png(args, &ch)?;
 				png::write(f, &png)?;
@@ -206,25 +213,7 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 			};
 		}
 
-		"png" | "dds" if file.with_extension("").extension() == Some("ch") => {
-			let output = output.with_extension("").with_extension("_ch");
-			let data = std::fs::File::open(file)?;
-			let itp = if ext == "png" {
-				tracing::info_span!("parse_png")
-					.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(&data).strict()?)))?
-			} else {
-				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?
-			};
-			let name = file.file_name().unwrap();
-			let guess =
-				cradle::ch::guess_from_image_size(name, itp.data.width(), itp.data.height());
-			let mode = args.ch_mode.or(guess).context("could not guess format")?;
-			let ch = crate::ch::itp_to_ch(args, mode, &itp)?;
-			std::fs::write(&output, cradle::ch::write(&ch)?)?;
-			tracing::info!("wrote to {output}");
-		}
-
-		"dds" | "png" => {
+		"png" | "dds" => {
 			let data = std::fs::File::open(file)?;
 			let mut itp = if ext == "png" {
 				tracing::info_span!("parse_png")
@@ -232,10 +221,25 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 			} else {
 				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?
 			};
-			guess_itp_revision(args, &mut itp);
-			let output = output.with_extension("itp");
-			std::fs::write(&output, cradle::itp::write(&itp)?)?;
-			tracing::info!("wrote to {output}");
+
+			let ch_mode = match file.with_extension("").extension() {
+				Some("1555") => Some(cradle::ch::Mode::Argb1555),
+				Some("4444") => Some(cradle::ch::Mode::Argb4444),
+				Some("8888") => Some(cradle::ch::Mode::Argb8888),
+				_ => None,
+			};
+
+			if let Some(ch_mode) = ch_mode {
+				let ch = crate::ch::itp_to_ch(args, ch_mode, &itp)?;
+				let output = output.with_extension("").with_extension("_ch");
+				std::fs::write(&output, cradle::ch::write(&ch)?)?;
+				tracing::info!("wrote to {output}");
+			} else {
+				guess_itp_revision(args, &mut itp);
+				let output = output.with_extension("itp");
+				std::fs::write(&output, cradle::itp::write(&itp)?)?;
+				tracing::info!("wrote to {output}");
+			}
 		}
 
 		"itc" => {
