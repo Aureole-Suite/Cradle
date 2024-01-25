@@ -183,3 +183,15 @@ guess! {
 	"",         Argb4444,  768,  512;
 	"",         Argb4444, 1024, 1024;
 }
+
+#[cfg(test)]
+#[filetest::filetest("../../samples/ch/*._ch")]
+fn test_parse_all(path: &std::path::Path, bytes: &[u8]) -> Result<(), anyhow::Error> {
+	let name = path.file_name().unwrap().to_str().unwrap();
+	let (mode, width, _) = guess_from_byte_size(name, bytes.len()).unwrap();
+	let itp = read(mode, width, bytes)?;
+	let bytes2 = write(&itp)?;
+	let itp2 = read(mode, width, &bytes2)?;
+	assert_eq!(itp, itp2);
+	Ok(())
+}
