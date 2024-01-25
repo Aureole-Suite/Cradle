@@ -225,9 +225,16 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 		}
 
 		"dds" | "png" => {
-			let data = to_itp(args, file)?;
+			let data = std::fs::File::open(file)?;
+			let mut itp = if ext == "png" {
+				tracing::info_span!("parse_png")
+					.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(&data).strict()?)))?
+			} else {
+				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?
+			};
+			guess_itp_revision(args, &mut itp);
 			let output = output.with_extension("itp");
-			std::fs::write(&output, data)?;
+			std::fs::write(&output, cradle::itp::write(&itp)?)?;
 			tracing::info!("wrote to {output}");
 		}
 
@@ -286,31 +293,6 @@ fn effective_input_file(file: &Utf8Path) -> eyre::Result<Utf8PathBuf> {
 	} else {
 		eyre::bail!("file doesn't exist")
 	}
-}
-
-fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
-	let data = match path.extension() {
-		Some("png") => {
-			let data = std::fs::File::open(path)?;
-			let mut itp = tracing::info_span!("parse_png")
-				.in_scope(|| Ok(itp_png::png_to_itp(args, &png::read(&data).strict()?)))?;
-			guess_itp_revision(args, &mut itp);
-			cradle::itp::write(&itp)?
-		}
-
-		Some("dds") => {
-			let data = std::fs::File::open(path)?;
-			let mut itp =
-				tracing::info_span!("parse_dds").in_scope(|| itp_dds::dds_to_itp(args, &data))?;
-			guess_itp_revision(args, &mut itp);
-			cradle::itp::write(&itp)?
-		}
-
-		Some("itp") => std::fs::read(path)?,
-
-		_ => eyre::bail!("unknown file extension"),
-	};
-	Ok(data)
 }
 
 fn guess_itp_revision(args: &Args, itp: &mut cradle::itp::Itp) {

@@ -180,7 +180,7 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 				(cradle::itp::write(&itp)?, offset)
 			} else {
 				let offset = spec.offset.unwrap_or_default();
-				(crate::to_itp(args, &path)?, offset)
+				(to_itp(args, &path)?, offset)
 			};
 
 		let (w, h) = cradle::itp::read_size(&itp_data)?;
@@ -195,6 +195,35 @@ pub fn create(args: &Args, spec: ItcSpec, dir: &Utf8Path) -> eyre::Result<cradle
 		};
 	}
 	Ok(itc)
+}
+
+fn to_itp(args: &Args, path: &Utf8Path) -> eyre::Result<Vec<u8>> {
+	let data = match path.extension() {
+		Some("png") => {
+			let data = std::fs::File::open(path)?;
+			let mut itp = tracing::info_span!("parse_png").in_scope(|| {
+				Ok(crate::itp_png::png_to_itp(
+					args,
+					&png::read(&data).strict()?,
+				))
+			})?;
+			crate::guess_itp_revision(args, &mut itp);
+			cradle::itp::write(&itp)?
+		}
+
+		Some("dds") => {
+			let data = std::fs::File::open(path)?;
+			let mut itp = tracing::info_span!("parse_dds")
+				.in_scope(|| crate::itp_dds::dds_to_itp(args, &data))?;
+			crate::guess_itp_revision(args, &mut itp);
+			cradle::itp::write(&itp)?
+		}
+
+		Some("itp") => std::fs::read(path)?,
+
+		_ => eyre::bail!("unknown file extension"),
+	};
+	Ok(data)
 }
 
 fn pad(png: &mut png::Png, x: isize, y: isize, w: usize, h: usize) {
