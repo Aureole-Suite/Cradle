@@ -31,6 +31,62 @@ pub enum ImageData {
 	Argb8888(Raster<u32>),
 }
 
+impl ImageData {
+	pub fn to_argb32(&self) -> Raster<u32> {
+		match self {
+			ImageData::Argb1555(img) => img.map(|k| from_1555(*k)),
+			ImageData::Argb4444(img) => img.map(|k| from_4444(*k)),
+			ImageData::Argb8888(img) => img.clone(),
+		}
+	}
+
+	pub fn from_argb32(img: Raster<u32>, mode: Mode) -> ImageData {
+		match mode {
+			Mode::Argb1555 => ImageData::Argb1555(img.map(|k| to_1555(*k))),
+			Mode::Argb4444 => ImageData::Argb4444(img.map(|k| to_4444(*k))),
+			Mode::Argb8888 => ImageData::Argb8888(img),
+		}
+	}
+}
+
+fn from(a: u16, m: u16) -> u8 {
+	let m = (1 << m) - 1;
+	((a & m) * 255 / m) as u8
+}
+
+fn from_1555(k: u16) -> u32 {
+	u32::from_le_bytes([
+		from(k, 5),
+		from(k >> 5, 5),
+		from(k >> 10, 5),
+		from(k >> 15, 1),
+	])
+}
+
+pub(crate) fn from_4444(k: u16) -> u32 {
+	u32::from_le_bytes([
+		from(k, 4),
+		from(k >> 4, 4),
+		from(k >> 8, 4),
+		from(k >> 12, 4),
+	])
+}
+
+fn to(k: u8, m: u16) -> u16 {
+	let m = (1 << m) - 1;
+	(k as u16 * m + 128) / 255
+}
+
+fn to_1555(k: u32) -> u16 {
+	let [b, g, r, a] = k.to_le_bytes();
+	to(b, 5) | to(g, 5) << 5 | to(r, 5) << 10 | to(a, 1) << 15
+}
+
+pub(crate) fn to_4444(k: u32) -> u16 {
+	let [b, g, r, a] = k.to_le_bytes();
+	to(b, 4) | to(g, 4) << 4 | to(r, 4) << 8 | to(a, 4) << 12
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
 	Argb1555,

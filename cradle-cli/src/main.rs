@@ -207,7 +207,7 @@ fn process(cli: &Cli, raw_file: &Utf8Path) -> eyre::Result<()> {
 			} else {
 				let output = output.with_extension(&format!("{ext}.png"));
 				let f = std::fs::File::create(&output)?;
-				let png = ch::ch_to_png(args, &ch)?;
+				let png = ch::ch_to_png(args, &ch);
 				png::write(f, &png)?;
 				tracing::info!("wrote to {output}");
 			};

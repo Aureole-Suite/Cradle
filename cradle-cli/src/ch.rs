@@ -8,51 +8,9 @@ use cradle::{
 use crate::png;
 use crate::Args;
 
-pub fn ch_to_png(args: &Args, ch: &ImageData) -> eyre::Result<png::Png> {
+pub fn ch_to_png(args: &Args, ch: &ImageData) -> png::Png {
 	let _ = args;
-	Ok(match ch {
-		ImageData::Argb1555(img) => png::Png::Argb32(vec![img.map(from_1555)]),
-		ImageData::Argb4444(img) => png::Png::Argb32(vec![img.map(from_4444)]),
-		ImageData::Argb8888(img) => png::Png::Argb32(vec![img.clone()]),
-	})
-}
-
-fn from(a: u16, m: u16) -> u8 {
-	let m = (1 << m) - 1;
-	((a & m) * 255 / m) as u8
-}
-
-fn from_1555(&k: &u16) -> u32 {
-	u32::from_le_bytes([
-		from(k, 5),
-		from(k >> 5, 5),
-		from(k >> 10, 5),
-		from(k >> 15, 1),
-	])
-}
-
-fn from_4444(&k: &u16) -> u32 {
-	u32::from_le_bytes([
-		from(k, 4),
-		from(k >> 4, 4),
-		from(k >> 8, 4),
-		from(k >> 12, 4),
-	])
-}
-
-fn to(k: u8, m: u16) -> u16 {
-	let m = (1 << m) - 1;
-	(k as u16 * m + 128) / 255
-}
-
-fn to_1555(&k: &u32) -> u16 {
-	let [b, g, r, a] = k.to_le_bytes();
-	to(b, 5) | to(g, 5) << 5 | to(r, 5) << 10 | to(a, 1) << 15
-}
-
-fn to_4444(&k: &u32) -> u16 {
-	let [b, g, r, a] = k.to_le_bytes();
-	to(b, 4) | to(g, 4) << 4 | to(r, 4) << 8 | to(a, 4) << 12
+	png::Png::Argb32(vec![ch.to_argb32()])
 }
 
 pub fn itp_to_ch(args: &Args, mode: Mode, itp: &cradle::itp::Itp) -> eyre::Result<ImageData> {
@@ -65,11 +23,7 @@ pub fn itp_to_ch(args: &Args, mode: Mode, itp: &cradle::itp::Itp) -> eyre::Resul
 		}
 		_ => eyre::bail!("unsupported input format"),
 	};
-	Ok(match mode {
-		Mode::Argb1555 => ImageData::Argb1555(data.map(to_1555)),
-		Mode::Argb4444 => ImageData::Argb4444(data.map(to_4444)),
-		Mode::Argb8888 => ImageData::Argb8888(data),
-	})
+	Ok(ImageData::from_argb32(data, mode))
 }
 
 pub fn ch_to_dds(args: &Args, write: impl Write, ch: &ImageData) -> eyre::Result<()> {
