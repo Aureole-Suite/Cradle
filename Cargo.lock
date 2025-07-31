@@ -209,7 +209,7 @@ dependencies = [
  "extend",
  "falcompress",
  "filetest",
- "gospel 0.1.1",
+ "gospel",
  "indicatif",
  "memmap2",
  "num_enum",
@@ -379,7 +379,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9227c2072055c32a299015e65af70b2dd4797e4f0598d8e3ebe48c3909c718b3"
 dependencies = [
  "bitmatch",
- "gospel 0.3.1",
+ "gospel",
  "thiserror 2.0.12",
 ]
 
@@ -430,17 +430,6 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "gospel"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95806f9b14571299179599809fbea7820ab7541e1dbb0afa7c08fcaef571db39"
-dependencies = [
- "gospel-dump",
- "paste",
- "thiserror 1.0.48",
-]
-
-[[package]]
-name = "gospel"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cceecce6f4eed9f1e8390d809f8436ca148f6404aaf3b8e81a18dcbaef8a65a7"
@@ -448,12 +437,6 @@ dependencies = [
  "paste",
  "thiserror 1.0.48",
 ]
-
-[[package]]
-name = "gospel-dump"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a74e0caaa6007818c88f24a5d5fc373ab9c6398fe97749451ed14af02f7bf29"
 
 [[package]]
 name = "hashbrown"
