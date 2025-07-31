@@ -95,9 +95,8 @@ pub fn dds_to_itp(args: &Args, mut read: impl Read) -> eyre::Result<Itp> {
 		let mut palette = [0; 4 * 256];
 		read.read_exact(&mut palette)?;
 		let mut palette = palette
-			.array_chunks()
-			.copied()
-			.map(|[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))
+			.as_chunks().0.iter()
+			.map(|&[r, g, b, a]| u32::from_le_bytes([b, g, r, a]))
 			.collect::<Vec<_>>();
 		let data = read_data(read, &dds, 1, u8::from_le_bytes)?;
 
@@ -194,7 +193,7 @@ fn read_data<T, const N: usize>(
 		out.push(Raster::new_with(
 			w,
 			h,
-			data.array_chunks().map(|a| from_le_bytes(*a)).collect(),
+			data.as_chunks().0.iter().map(|a| from_le_bytes(*a)).collect(),
 		))
 	}
 	Ok(out)

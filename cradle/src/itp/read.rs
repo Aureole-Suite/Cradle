@@ -350,7 +350,7 @@ fn read_idat(
 		from_le_bytes: fn([u8; N]) -> T,
 	) -> Result<Raster<T>, Error> {
 		let data = read_maybe_compressed(f, status.compression, w * h * N)?;
-		let data = data.array_chunks().copied().map(from_le_bytes).collect();
+		let data = data.as_chunks().0.iter().copied().map(from_le_bytes).collect();
 		Ok(do_unswizzle(data, w, h, status.pixel_format))
 	}
 

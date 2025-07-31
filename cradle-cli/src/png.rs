@@ -86,7 +86,7 @@ pub fn read(f: impl Read) -> eyre::Result<Png> {
 
 	let pal = png.info().palette.as_ref().map(|pal| {
 		let mut pal = pal
-			.array_chunks()
+			.as_chunks().0.iter()
 			.map(|&[r, g, b]| u32::from_le_bytes([b, g, r, 0xFF]))
 			.collect::<Vec<_>>();
 		if let Some(trns) = &png.info().trns {
@@ -132,7 +132,7 @@ fn read_frames<R: Read, T, const N: usize>(
 			frame.width as usize,
 			frame.height as usize,
 			buf[..frame.buffer_size()]
-				.array_chunks()
+				.as_chunks().0.iter()
 				.copied()
 				.map(&mut sample)
 				.collect(),

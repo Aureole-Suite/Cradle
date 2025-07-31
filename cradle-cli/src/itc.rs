@@ -68,7 +68,7 @@ pub fn extract(args: &Args, itc: &cradle::itc::Itc, output: Output) -> eyre::Res
 		let frame_out = if args.no_dir {
 			output.with_extension(&format!("{i}.itp"))
 		} else {
-			output.with_extension("").join(&format!("{i}.itp"))
+			output.with_extension("").join(format!("{i}.itp"))
 		};
 
 		// Not sure if this is the right formula? Previous Cradle use different
@@ -346,7 +346,7 @@ fn test_itp_roundtrips(path: &Utf8Path, bytes: &[u8]) -> Result<(), eyre::Error>
 }
 
 // Crop/pad currently do not roundtrip
-#[cfg(feature = "ignored")]
+#[cfg(false)]
 #[cfg(test)]
 #[filetest::filetest("../../samples/itc/*.itc")]
 fn test_crop_pad(path: &Utf8Path, bytes: &[u8]) -> Result<(), eyre::Error> {

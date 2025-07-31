@@ -1,5 +1,3 @@
-#![feature(array_chunks)]
-
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{builder::TypedValueParser, Parser, ValueHint};
 use eyre::ContextCompat as _;

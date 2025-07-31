@@ -114,7 +114,7 @@ pub fn read(mode: Mode, width: usize, ch: &[u8]) -> Result<ImageData, ReadError>
 		ensure!(stride != 0, "invalid width");
 		let height = ch.len() / stride;
 		ensure!(height * stride == ch.len(), "invalid size");
-		let data = ch.array_chunks().copied().map(from_le_bytes).collect();
+		let data = ch.as_chunks().0.iter().copied().map(from_le_bytes).collect();
 		Ok(Raster::new_with(width, height, data))
 	}
 	Ok(match mode {

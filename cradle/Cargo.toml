@@ -12,7 +12,7 @@ falcompress.git = "https://github.com/Aureole-Suite/Falcompress.git"
 strict_result = "1.2.0"
 
 [dev-dependencies]
-filetest = "0.1.1"
+filetest = "0.2.0"
 gospel = { version = "0.1.1", features = ["dump"] }
 anyhow = "1.0"
 memmap2 = "0.9"

@@ -411,7 +411,7 @@ fn a_fast_mode2(data: &Raster<u8>) -> Result<Vec<u8>, Error> {
 
 	let mut colors = Vec::new();
 	let mut out = Vec::new();
-	for chunk in data.array_chunks() {
+	for chunk in data.as_chunks().0 {
 		let mut chunk_colors = Vec::new();
 		if chunk != &[0; 8 * 16] {
 			for &a in chunk {

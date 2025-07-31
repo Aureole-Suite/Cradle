@@ -9,13 +9,6 @@ pub enum Output {
 }
 
 impl Output {
-	pub fn with_name(&self, name: &str) -> Utf8PathBuf {
-		match self {
-			Output::At(path) => path.to_path_buf(),
-			Output::In(path) => path.with_file_name(name),
-		}
-	}
-
 	pub fn with_extension(&self, ext: &str) -> Utf8PathBuf {
 		match self {
 			Output::At(path) => path.to_path_buf(),

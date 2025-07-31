@@ -1,5 +1,4 @@
 #![feature(error_generic_member_access)]
-#![feature(array_chunks)]
 #![feature(array_try_from_fn)]
 #![feature(never_type)]
 #![feature(decl_macro)]

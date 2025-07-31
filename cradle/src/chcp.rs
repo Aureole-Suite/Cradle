@@ -1,10 +1,9 @@
 use std::backtrace::Backtrace;
 
 use gospel::read::{Le as _, Reader};
-use gospel::write::{Le as _, Writer};
 
 use crate::raster::Raster;
-use crate::util::{bail, ensure, OptionTExt as _};
+use crate::util::OptionTExt as _;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
@@ -59,6 +58,6 @@ pub fn read(ch: &[u8], cp: &[u8]) -> Result<Vec<Raster<u32>>, ReadError> {
 	Ok(frames)
 }
 
-fn unduplicate(tiles: &mut Vec<[u32; 256]>) {
+fn unduplicate(_tiles: &mut Vec<[u32; 256]>) {
 	// TODO
 }

@@ -104,11 +104,11 @@ fn test_parse_all_png(path: &camino::Utf8Path, bytes: &[u8]) -> Result<(), eyre:
 	let (mode, width, _) =
 		cradle::ch::guess_from_byte_size(path.file_name().unwrap(), bytes.len()).unwrap();
 	let ch = cradle::ch::read(mode, width, bytes)?;
-	let png = ch_to_png(args, &ch)?;
+	let png = ch_to_png(args, &ch);
 	let itp = crate::itp_png::png_to_itp(args, &png);
 	let ch2 = itp_to_ch(args, mode, &itp)?;
 	assert_eq!(ch, ch2);
-	let png2 = ch_to_png(args, &ch2)?;
+	let png2 = ch_to_png(args, &ch2);
 	assert!(png == png2);
 	Ok(())
 }
