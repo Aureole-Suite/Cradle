@@ -1,3 +1,4 @@
+use crate::raster::Raster;
 use gospel::read::Reader;
 use num_enum::TryFromPrimitive;
 use std::ffi::CString;
@@ -218,8 +219,6 @@ pub mod abbr {
 }
 
 use abbr::*;
-
-use crate::raster::Raster;
 
 pub fn read(f: &[u8]) -> Result<Itp, read::Error> {
 	read::read(&mut Reader::new(f))
