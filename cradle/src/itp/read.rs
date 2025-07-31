@@ -1,6 +1,5 @@
 use std::backtrace::Backtrace;
 
-use falcompress::freadp::freadp;
 use gospel::read::{Le as _, Reader};
 use num_enum::TryFromPrimitive;
 
@@ -566,16 +565,29 @@ fn read_maybe_compressed(f: &mut Reader, comp: CT, len: usize) -> Result<Vec<u8>
 		CT::Bz_2 => freadp_multi(f, len)?,
 		CT::C77 => freadp(f)?,
 	};
+	println!("read_maybe_compressed: comp={comp:?}, len={len}, data.len()={}", data.len());
 	ensure_size(data.len(), len)?;
 	Ok(data)
 }
 
 fn freadp_multi(f: &mut Reader, len: usize) -> Result<Vec<u8>, Error> {
-	let mut out = Vec::new();
+	let mut out = Vec::with_capacity(len);
 	while out.len() < len {
-		out.extend(freadp(f)?)
+		do_freadp(f, &mut out)?;
 	}
 	Ok(out)
+}
+
+fn freadp(f: &mut Reader) -> Result<Vec<u8>, Error> {
+	let mut out = Vec::new();
+	do_freadp(f, &mut out)?;
+	Ok(out)
+}
+
+fn do_freadp(f: &mut Reader, out: &mut Vec<u8>) -> Result<(), Error> {
+	let len = falcompress::ed7::freadp(f.remaining(), out)?;
+	f.slice(len)?;
+	Ok(())
 }
 
 fn ensure_end(f: &Reader) -> Result<(), Error> {

@@ -10,6 +10,7 @@ impl<T> std::fmt::Debug for Raster<T> {
 		f.debug_struct("Raster")
 			.field("width", &self.width)
 			.field("height", &self.height)
+			.field("type", &format_args!("{}", std::any::type_name::<T>()))
 			.finish_non_exhaustive()
 	}
 }

@@ -4,11 +4,11 @@ version = "0.3.0"
 edition = "2021"
 
 [dependencies]
-thiserror = "1.0.0"
+thiserror = "2.0.12"
 num_enum = "0.7.0"
 extend = "1.2.0"
 gospel = "0.1.1"
-falcompress.git = "https://github.com/Aureole-Suite/Falcompress.git"
+falcompress = "0.2.1"
 strict_result = "1.2.0"
 
 [dev-dependencies]
@@ -17,4 +17,4 @@ gospel = { version = "0.1.1", features = ["dump"] }
 anyhow = "1.0"
 memmap2 = "0.9"
 rayon = "1.8"
-indicatif = { version = "0.17", features = ["rayon"] }
+indicatif = { version = "0.18", features = ["rayon"] }

@@ -453,6 +453,6 @@ fn maybe_compress(compression: CT, data: &[u8]) -> Vec<u8> {
 		data.to_owned()
 	} else {
 		// TODO
-		falcompress::bzip::compress_ed7_to_vec(data, Default::default())
+		falcompress::ed7::compress(data, Default::default())
 	}
 }
